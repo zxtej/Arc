@@ -217,6 +217,8 @@ public class Pixmaps{
         texture.draw(drawPixmap, x, y);
     }
 
+    private static final int[] offsets = {1, 0, 1, 1, 0, 1, -1, 1, -1, 0, -1, -1, 0, -1, 1, -1};
+
     /**
      * Applies alpha bleeding to the target pixmap, but with only one iteration.
      * This is faster than standard iterative bleeding.
@@ -225,7 +227,6 @@ public class Pixmaps{
     public static Pixmap bleed(Pixmap image){
         int w = image.width, h = image.height;
         ByteBuffer pixels = image.pixels;
-        int[] offsets = {1, 0, 1, 1, 0, 1, -1, 1, -1, 0, -1, -1, 0, -1, 1, -1};
 
         for(int x = 0; x < w; x++){
             for(int y = 0; y < h; y++){
@@ -264,8 +265,6 @@ public class Pixmaps{
     public static Pixmap bleed(Pixmap image, int maxIterations){
         int total = image.width * image.height;
         ByteBuffer pixels = image.pixels;
-
-        int[] offsets = {1, 0, 1, 1, 0, 1, -1, 1, -1, 0, -1, -1, 0, -1, 1, -1};
 
         boolean[] data = new boolean[total];
         int[] pending = new int[total];

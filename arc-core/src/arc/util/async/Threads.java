@@ -28,13 +28,16 @@ public class Threads{
         }
     }
 
-    public static ExecutorService executor(int threads, boolean daemon){
+    public static ExecutorService executor(int threads, boolean daemon, String name){
         return Executors.newFixedThreadPool(threads, r -> {
-            Thread thread = new Thread(r, "AsyncExecutor-Thread");
+            Thread thread = new Thread(r, name);
             thread.setDaemon(daemon);
             thread.setUncaughtExceptionHandler((t, e) -> e.printStackTrace());
             return thread;
         });
+    }
+    public static ExecutorService executor(int threads, boolean daemon){
+        return executor(threads, daemon, "AsyncExecutor-Thread");
     }
 
     public static ExecutorService executor(int threads){

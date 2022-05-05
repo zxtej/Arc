@@ -12,7 +12,7 @@ import java.util.concurrent.*;
 
 /** Utility class for making HTTP requests. */
 public class Http{
-    protected static ExecutorService exec = Threads.executor(8);
+    protected static ExecutorService exec = Threads.executor(8, true, "HTTP");
 
     /** @return a new HttpRequest that must be configured & submitted. */
     public static HttpRequest request(HttpMethod method, String url){

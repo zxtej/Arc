@@ -22,8 +22,12 @@ public class AsyncExecutor implements Disposable{
 
     /** Creates a new AsyncExecutor that allows maxConcurrent {@link Runnable} instances to run in parallel. */
     public AsyncExecutor(int maxConcurrent){
+        this(maxConcurrent, "AsyncExecutor-Thread");
+    }
+
+    public AsyncExecutor(int maxConcurrent, String name){
         executor = Executors.newFixedThreadPool(maxConcurrent, r -> {
-            Thread thread = new Thread(r, "AsyncExecutor-Thread");
+            Thread thread = new Thread(r, name);
             thread.setDaemon(true);
             thread.setUncaughtExceptionHandler((t, e) -> e.printStackTrace());
             return thread;
