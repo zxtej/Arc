@@ -304,7 +304,7 @@ public class TexturePacker{
         if(offsets){
             //offset xy
             write.s(rect.offsetX);
-            write.s((rect.originalHeight - rect.regionHeight - rect.offsetY));
+            write.s(rect.originalHeight - rect.regionHeight - rect.offsetY);
             //original size
             write.s(rect.originalWidth);
             write.s(rect.originalHeight);
@@ -582,7 +582,7 @@ public class TexturePacker{
         public boolean alias = true;
         public String outputFormat = "png";
         public boolean ignoreBlankImages = true;
-        public boolean fast = true; //with fast = false packing takes an eternity, I have no idea why that wasn't the deafult before
+        public boolean fast = true; //with fast = false packing takes an eternity, I have no idea why that wasn't the default before
         public boolean silent;
         public boolean printAliases;
         public boolean combineSubdirectories;
