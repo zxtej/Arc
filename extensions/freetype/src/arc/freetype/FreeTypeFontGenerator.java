@@ -801,7 +801,7 @@ public class FreeTypeFontGenerator implements Disposable{
         /** Whether to flip the font vertically */
         public boolean flip = false;
         /** Whether to generate mip maps for the resulting texture */
-        public boolean genMipMaps = true;
+        public boolean genMipMaps = false;
         /** Minification filter */
         public TextureFilter minFilter = TextureFilter.nearest;
         /** Magnification filter */

@@ -72,7 +72,7 @@ public class SortedSpriteBatch extends SpriteBatch{
             req.height = height;
             req.color = colorPacked;
             req.rotation = rotation;
-            req.region = region;
+            req.region.set(region);
             req.mixColor = mixColorPacked;
             req.blending = blending;
             req.texture = null;
