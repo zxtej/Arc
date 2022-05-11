@@ -13,6 +13,7 @@ public class Lines{
     private static Vec2 vector = new Vec2(), u = new Vec2(), v = new Vec2(), inner = new Vec2(), outer = new Vec2();
     private static FloatSeq floats = new FloatSeq(20);
     private static FloatSeq floatBuilder = new FloatSeq(20);
+    private static FloatSeq tmpFloats = new FloatSeq(20);
     private static boolean building;
     private static float circlePrecision = 0.4f;
 
@@ -26,21 +27,21 @@ public class Lines{
     }
 
     public static void lineAngle(float x, float y, float angle, float length, boolean cap){
-        vector.set(1, 1).setLength(length).setAngle(angle);
+        vector.trns(angle, length);
 
         line(x, y, x + vector.x, y + vector.y, cap);
     }
 
     public static void lineAngle(float x, float y, float angle, float length){
-        vector.set(1, 1).setLength(length).setAngle(angle);
+        vector.trns(angle, length);
 
         line(x, y, x + vector.x, y + vector.y);
     }
 
-    public static void lineAngle(float x, float y, float offset, float angle, float length){
-        vector.set(1, 1).setLength(length + offset).setAngle(angle);
+    public static void lineAngle(float x, float y, float angle, float length, float offset){
+        vector.trns(angle, 1f);
 
-        line(x, y, x + vector.x, y + vector.y);
+        line(x + vector.x * offset, y + vector.y * offset, x + vector.x * (length + offset), y + vector.y * (length + offset));
     }
 
     public static void lineAngleCenter(float x, float y, float angle, float length, boolean cap){
@@ -80,36 +81,36 @@ public class Lines{
 
             if(cap){
                 Fill.quad(
-                region,
+                        region,
 
-                x - diffx - diffy,
-                y - diffy + diffx,
+                        x - diffx - diffy,
+                        y - diffy + diffx,
 
-                x - diffx + diffy,
-                y - diffy - diffx,
+                        x - diffx + diffy,
+                        y - diffy - diffx,
 
-                x2 + diffx + diffy,
-                y2 + diffy - diffx,
+                        x2 + diffx + diffy,
+                        y2 + diffy - diffx,
 
-                x2 + diffx - diffy,
-                y2 + diffy + diffx
+                        x2 + diffx - diffy,
+                        y2 + diffy + diffx
 
                 );
             }else{
                 Fill.quad(
-                region,
+                        region,
 
-                x - diffy,
-                y + diffx,
+                        x - diffy,
+                        y + diffx,
 
-                x + diffy,
-                y - diffx,
+                        x + diffy,
+                        y - diffx,
 
-                x2 + diffy,
-                y2 - diffx,
+                        x2 + diffy,
+                        y2 - diffx,
 
-                x2 - diffy,
-                y2 + diffx
+                        x2 - diffy,
+                        y2 + diffx
 
                 );
             }
@@ -145,54 +146,116 @@ public class Lines{
         polyline(points.items, points.size, wrap);
     }
 
+    private static final Vec2 AB = new Vec2(), BC = new Vec2();
+    private static final Vec2 A = new Vec2(), B = new Vec2(), C = new Vec2(), E = new Vec2(), D = new Vec2();
+    private static final Vec2 vec1 = new Vec2();
+    private static final Vec2 D0 = new Vec2(), E0 = new Vec2();
+    private static final Vec2 q1 = new Vec2(), q2 = new Vec2(), q3 = new Vec2(), q4 = new Vec2();
+
+    //implementation taken from https://github.com/earlygrey/shapedrawer/blob/master/drawer/src/space/earlygrey/shapedrawer/ShapeDrawer.java
     public static void polyline(float[] points, int length, boolean wrap){
         if(length < 4) return;
 
-        if(!wrap){
-            for(int i = 0; i < length-2; i+= 2){
-                float cx = points[i];
-                float cy = points[i + 1];
-                float cx2 = points[i + 2];
-                float cy2 = points[i + 3];
-                line(cx, cy, cx2, cy2);
+        float halfWidth = 0.5f * stroke;
+        boolean open = !wrap;
+
+        for(int i = 2; i < length - 2; i += 2){
+
+            A.set(points[i - 2], points[i - 1]);
+            B.set(points[i], points[i + 1]);
+            C.set(points[i + 2], points[i + 3]);
+
+            preparePointyJoin(A, B, C, D, E, halfWidth);
+
+            float x3 = D.x, y3 = D.y;
+            float x4 = E.x, y4 = E.y;
+
+            q3.set(D);
+            q4.set(E);
+
+            if(i == 2){
+                if(open){
+                    prepareFlatEndpoint(points[2], points[3], points[0], points[1], D, E, halfWidth);
+                    q1.set(E);
+                    q2.set(D);
+                }else{
+                    vec1.set(points[length - 2], points[length - 1]);
+                    preparePointyJoin(vec1, A, B, D0, E0, halfWidth);
+
+                    q1.set(E0);
+                    q2.set(D0);
+                }
             }
-        }else{
-            floats.clear();
 
-            for(int i = 0; i < length; i += 2){
-                float x0 = points[Mathf.mod(i - 2, length)];
-                float y0 = points[Mathf.mod(i - 1, length)];
-                float x1 = points[i];
-                float y1 = points[i + 1];
-                float x2 = points[(i + 2) % length];
-                float y2 = points[(i + 3) % length];
-
-                float ang0 = Angles.angle(x0, y0, x1, y1), ang1 = Angles.angle(x1, y1, x2, y2);
-                float beta = Mathf.sinDeg(ang1 - ang0);
-
-                u.set(x0, y0).sub(x1, y1).scl(1f / Mathf.dst(x0, y0, x1, y1)).scl(stroke / (2f*beta));
-                v.set(x2, y2).sub(x1, y1).scl(1f / Mathf.dst(x2, y2, x1, y1)).scl(stroke / (2f*beta));
-
-                inner.set(x1, y1).add(u).add(v);
-                outer.set(x1, y1).sub(u).sub(v);
-
-                floats.add(inner.x, inner.y, outer.x, outer.y);
-            }
-
-            for(int i = 0; i < floats.size; i += 4){
-                float x1 = floats.items[i];
-                float y1 = floats.items[i + 1];
-                float x2 = floats.items[(i + 2) % floats.size];
-                float y2 = floats.items[(i + 3) % floats.size];
-
-                float x3 = floats.items[(i + 4) % floats.size];
-                float y3 = floats.items[(i + 5) % floats.size];
-                float x4 = floats.items[(i + 6) % floats.size];
-                float y4 = floats.items[(i + 7) % floats.size];
-
-                Fill.quad(x1, y1, x3, y3, x4, y4, x2, y2);
-            }
+            pushQuad();
+            q1.set(x4, y4);
+            q2.set(x3, y3);
         }
+
+        if(open){
+            //draw last link on path
+            prepareFlatEndpoint(B, C, D, E, halfWidth);
+            q3.set(E);
+            q4.set(D);
+            pushQuad();
+        }else{
+            //draw last link on path
+            A.set(points[0], points[1]);
+            preparePointyJoin(B, C, A, D, E, halfWidth);
+            q3.set(D);
+            q4.set(E);
+            pushQuad();
+
+            //draw connection back to first vertex
+            q1.set(D);
+            q2.set(E);
+            q3.set(E0);
+            q4.set(D0);
+            pushQuad();
+        }
+    }
+
+    private static void pushQuad(){
+        Fill.quad(q1.x, q1.y, q2.x, q2.y, q3.x, q3.y, q4.x, q4.y);
+    }
+
+    private static void prepareFlatEndpoint(Vec2 pathPoint, Vec2 endPoint, Vec2 D, Vec2 E, float halfLineWidth){
+        prepareFlatEndpoint(pathPoint.x, pathPoint.y, endPoint.x, endPoint.y, D, E, halfLineWidth);
+    }
+
+    private static void prepareFlatEndpoint(float pathPointX, float pathPointY, float endPointX, float endPointY, Vec2 D, Vec2 E, float halfLineWidth){
+        v.set(endPointX, endPointY).sub(pathPointX, pathPointY).setLength(halfLineWidth);
+        D.set(v.y, -v.x).add(endPointX, endPointY);
+        E.set(-v.y, v.x).add(endPointX, endPointY);
+    }
+
+    private static float preparePointyJoin(Vec2 A, Vec2 B, Vec2 C, Vec2 D, Vec2 E, float halfLineWidth){
+        AB.set(B).sub(A);
+        BC.set(C).sub(B);
+        float angle = angleRad(AB, BC);
+        if(Mathf.equal(angle, 0) || Mathf.equal(angle, Mathf.PI2)){
+            prepareStraightJoin(B, D, E, halfLineWidth);
+            return angle;
+        }
+        float len = (float)(halfLineWidth / Math.sin(angle));
+        boolean bendsLeft = angle < 0;
+        AB.setLength(len);
+        BC.setLength(len);
+        Vector insidePoint = bendsLeft ? D : E;
+        Vector outsidePoint = bendsLeft ? E : D;
+        insidePoint.set(B).sub(AB).add(BC);
+        outsidePoint.set(B).add(AB).sub(BC);
+        return angle;
+    }
+
+    private static float angleRad(Vec2 v, Vec2 reference){
+        return (float)Math.atan2(reference.x * v.y - reference.y * v.x, v.x * reference.x + v.y * reference.y);
+    }
+
+    private static void prepareStraightJoin(Vec2 B, Vec2 D, Vec2 E, float halfLineWidth){
+        AB.setLength(halfLineWidth);
+        D.set(-AB.y, AB.x).add(B);
+        E.set(AB.y, -AB.x).add(B);
     }
 
     public static void dashLine(float x1, float y1, float x2, float y2, int divisions){
@@ -201,7 +264,7 @@ public class Lines{
         for(int i = 0; i < divisions; i++){
             if(i % 2 == 0){
                 line(x1 + ((float)i / divisions) * dx, y1 + ((float)i / divisions) * dy,
-                x1 + ((i + 1f) / divisions) * dx, y1 + ((i + 1f) / divisions) * dy);
+                        x1 + ((i + 1f) / divisions) * dx, y1 + ((i + 1f) / divisions) * dy);
             }
         }
     }
@@ -209,19 +272,19 @@ public class Lines{
     public static void circle(float x, float y, float rad){
         poly(x, y, circleVertices(rad), rad);
     }
-    
+
     public static void ellipse(float x, float y, float rad, float width, float height, float rot){
         float sides = circleVertices(rad);
         float space = 360 / sides;
         for(int i = 0; i < sides; i++){
             float a = space * i;
             u.trns(rot,
-                rad * width * Mathf.cosDeg(a),
-                rad * height * Mathf.sinDeg(a)
+                    rad * width * Mathf.cosDeg(a),
+                    rad * height * Mathf.sinDeg(a)
             );
             v.trns(rot,
-                rad * width * Mathf.cosDeg(a + space),
-                rad * height * Mathf.sinDeg(a + space)
+                    rad * width * Mathf.cosDeg(a + space),
+                    rad * height * Mathf.sinDeg(a + space)
             );
             line(x + u.x, y + u.y, x + v.x, y + v.y);
         }
@@ -281,10 +344,10 @@ public class Lines{
         for(int i = 0; i < sides; i++){
             float a = space * i + angle, cos = Mathf.cosDeg(a), sin = Mathf.sinDeg(a), cos2 = Mathf.cosDeg(a + space), sin2 = Mathf.sinDeg(a + space);
             Fill.quad(
-            x + r1*cos, y + r1*sin,
-            x + r1*cos2, y + r1*sin2,
-            x + r2*cos2, y + r2*sin2,
-            x + r2*cos, y + r2*sin
+                    x + r1*cos, y + r1*sin,
+                    x + r1*cos2, y + r1*sin2,
+                    x + r2*cos2, y + r2*sin2,
+                    x + r2*cos, y + r2*sin
             );
         }
     }
@@ -359,22 +422,25 @@ public class Lines{
         line(fx, fy, x2, y2);
     }
 
-    public static void swirl(float x, float y, float radius, float finion){
-        swirl(x, y, radius, finion, 0f);
+    public static void arc(float x, float y, float radius, float fraction){
+        arc(x, y, radius, fraction, 0f);
     }
 
-    public static void swirl(float x, float y, float radius, float finion, float angle){
-        int sides = 50;
-        int max = (int)(sides * (finion + 0.001f));
+    public static void arc(float x, float y, float radius, float fraction, float rotation){
+        arc(x, y, radius, fraction, rotation, 50);
+    }
+
+    public static void arc(float x, float y, float radius, float fraction, float rotation, int sides){
+        int max = (int)(sides * fraction);
         vector.set(0, 0);
         floats.clear();
 
-        for(int i = 0; i < max; i++){
-            vector.set(radius, 0).setAngle(360f / sides * i + angle);
+        for(int i = 0; i <= max; i++){
+            vector.set(radius, 0).setAngle((float)i / max * fraction * 360f + rotation);
             float x1 = vector.x;
             float y1 = vector.y;
 
-            vector.set(radius, 0).setAngle(360f / sides * (i + 1) + angle);
+            vector.set(radius, 0).setAngle((float)(i + 1) / max * fraction * 360f + rotation);
 
             floats.add(x1 + x, y1 + y);
         }
