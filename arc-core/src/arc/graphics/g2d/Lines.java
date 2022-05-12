@@ -145,11 +145,9 @@ public class Lines{
         polyline(points.items, points.size, wrap);
     }
 
-    private static final Vec2 AB = new Vec2(), BC = new Vec2();
-    private static final Vec2 A = new Vec2(), B = new Vec2(), C = new Vec2(), E = new Vec2(), D = new Vec2();
-    private static final Vec2 vec1 = new Vec2();
-    private static final Vec2 D0 = new Vec2(), E0 = new Vec2();
-    private static final Vec2 q1 = new Vec2(), q2 = new Vec2(), q3 = new Vec2(), q4 = new Vec2();
+    private static final Vec2 AB = new Vec2(), BC = new Vec2(),
+    A = new Vec2(), B = new Vec2(), C = new Vec2(), E = new Vec2(), D = new Vec2(), vec1 = new Vec2(),
+    D0 = new Vec2(), E0 = new Vec2(), q1 = new Vec2(), q2 = new Vec2(), q3 = new Vec2(), q4 = new Vec2();
 
     //implementation taken from https://github.com/earlygrey/shapedrawer/blob/master/drawer/src/space/earlygrey/shapedrawer/ShapeDrawer.java
     public static void polyline(float[] points, int length, boolean wrap){
@@ -359,20 +357,6 @@ public class Lines{
         }
     }
 
-    public static void polySeg(int sides, int from, int to, float x, float y, float radius, float angle){
-        vector.set(0, 0);
-
-        for(int i = from; i < to; i++){
-            vector.trns(360f / sides * i + angle + 90, radius);
-            float x1 = vector.x;
-            float y1 = vector.y;
-
-            vector.trns(360f / sides * (i + 1) + angle + 90, radius);
-
-            line(x1 + x, y1 + y, vector.x + x, vector.y + y);
-        }
-    }
-
     public static void curve(float x1, float y1, float cx1, float cy1, float cx2, float cy2, float x2, float y2, int segments){
 
         // Algorithm shamelessly stolen from shaperenderer class
@@ -417,15 +401,15 @@ public class Lines{
         line(fx, fy, x2, y2);
     }
 
-    public static void swirl(float x, float y, float radius, float finion){
-        swirl(x, y, radius, finion, 0f);
+    public static void arc(float x, float y, float radius, float fraction){
+        arc(x, y, radius, fraction, 0f);
     }
 
-    public static void swirl(float x, float y, float radius, float fraction, float rotation){
-        swirl(x, y, radius, fraction, rotation, 50);
+    public static void arc(float x, float y, float radius, float fraction, float rotation){
+        arc(x, y, radius, fraction, rotation, 50);
     }
 
-    public static void swirl(float x, float y, float radius, float fraction, float rotation, int sides){
+    public static void arc(float x, float y, float radius, float fraction, float rotation, int sides){
         int max = (int)(sides * fraction);
         floats.clear();
 

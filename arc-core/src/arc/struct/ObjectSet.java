@@ -102,7 +102,7 @@ public class ObjectSet<T> implements Iterable<T>, Eachable<T>{
         return arr;
     }
 
-    public Seq<T> asArray(){
+    public Seq<T> toSeq(){
         return iterator().toSeq();
     }
 
@@ -186,6 +186,21 @@ public class ObjectSet<T> implements Iterable<T>, Eachable<T>{
         ensureCapacity(set.size);
         for(T key : set)
             add(key);
+    }
+
+    public void removeAll(T[] array, int offset, int length){
+        for(int i = offset, n = i + length; i < n; i++)
+            remove(array[i]);
+    }
+
+    public void removeAll(T[] array){
+        for(T t : array){
+            remove(t);
+        }
+    }
+
+    public void removeAll(Seq<? extends T> array){
+        removeAll(array.items, 0, array.size);
     }
 
     /** Skips checks for existing keys. */

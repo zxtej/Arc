@@ -1,8 +1,8 @@
-package arc.util.async;
+package arc.util;
 
 import arc.*;
 import arc.func.*;
-import arc.util.*;
+import arc.struct.*;
 
 import java.util.concurrent.*;
 
@@ -28,6 +28,16 @@ public class Threads{
         }
     }
 
+    public static void awaitAll(Seq<Future<?>> futures){
+        try{
+            for(Future<?> f : futures){
+                f.get();
+            }
+        }catch(ExecutionException | InterruptedException ex){
+            throw new ArcRuntimeException(ex.getCause());
+        }
+    }
+
     public static ExecutorService executor(int threads, boolean daemon, String name){
         return Executors.newFixedThreadPool(threads, r -> {
             Thread thread = new Thread(r, name);
@@ -44,20 +54,35 @@ public class Threads{
         return executor(threads, true);
     }
 
+    public static ExecutorService executor(){
+        return executor(Runtime.getRuntime().availableProcessors(), true);
+    }
+
+    /** @return an executor that has no limit on the amount of threads it will create. */
+    public static ExecutorService unboundedExecutor(){
+        return cachedExecutor(1, Integer.MAX_VALUE, false);
+    }
+
     public static ExecutorService cachedExecutor(){
-        return cachedExecutor(1, Integer.MAX_VALUE);
+        return cachedExecutor(1, Integer.MAX_VALUE, true);
     }
 
     public static ExecutorService cachedExecutor(int min){
-        return cachedExecutor(min, Integer.MAX_VALUE);
+        return cachedExecutor(min, Integer.MAX_VALUE, true);
     }
 
-    public static ExecutorService cachedExecutor(int min, int max){
-        return new ThreadPoolExecutor(min, max,
-        60L, TimeUnit.SECONDS,
-        new SynchronousQueue<>(),
+    /** @param blocking uses a BlockingQueue rather than a SynchronousQueue. Note that min is ignored when this is true. */
+    public static ExecutorService cachedExecutor(int min, int max, boolean blocking){
+        return cachedExecutor(min, max, blocking, null);
+    }
+
+    /** @param blocking uses a BlockingQueue rather than a SynchronousQueue. Note that min is ignored when this is true. */
+    public static ExecutorService cachedExecutor(int min, int max, boolean blocking, String name){
+        return new ThreadPoolExecutor(blocking ? max : min, max,
+        30L, TimeUnit.SECONDS,
+        blocking ? new LinkedBlockingQueue<>() : new SynchronousQueue<>(),
         r -> {
-            Thread thread = new Thread(r);
+            Thread thread = name != null ? new Thread(r, name) : new Thread(r);
             thread.setDaemon(true);
             thread.setUncaughtExceptionHandler((t, e) -> e.printStackTrace());
             return thread;

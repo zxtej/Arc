@@ -13,7 +13,6 @@ public class Rect implements Shape2D{
     /** Static temporary rectangle. Use with care! Use only when sure other code will not also use this. */
     public static final Rect tmp2 = new Rect();
 
-    private static final long serialVersionUID = 5733252015138115702L;
     public float x, y;
     public float width, height;
 
@@ -206,6 +205,10 @@ public class Rect implements Shape2D{
     public Vec2 getSize(Vec2 size){
         return size.set(width, height);
     }
+    
+    public static boolean contains(float x, float y, float width, float height, float px, float py){
+        return x <= px && x + width >= px && y <= py && y + height >= py;
+    }
 
     /**
      * @param x point x coordinate
@@ -305,6 +308,20 @@ public class Rect implements Shape2D{
         y = minY;
         height = maxY - minY;
 
+        return this;
+    }
+
+    /** "fixes" negative size dimensions. */
+    public Rect normalize(){
+        if(width < 0){
+            x += width;
+            width = -width;
+        }
+
+        if(height < 0){
+            y += height;
+            height = -height;
+        }
         return this;
     }
 

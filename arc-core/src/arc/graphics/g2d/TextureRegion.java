@@ -98,12 +98,14 @@ public class TextureRegion{
      * @param width The width of the texture region. May be negative to flip the sprite when drawn.
      * @param height The height of the texture region. May be negative to flip the sprite when drawn.
      */
-    public void set(int x, int y, int width, int height){
+    public TextureRegion set(int x, int y, int width, int height){
         float invTexWidth = 1f / texture.width;
         float invTexHeight = 1f / texture.height;
         set(x * invTexWidth, y * invTexHeight, (x + width) * invTexWidth, (y + height) * invTexHeight);
         this.width = Math.abs(width);
         this.height = Math.abs(height);
+
+        return this;
     }
 
     public void set(float u, float v, float u2, float v2){
@@ -173,12 +175,20 @@ public class TextureRegion{
         setU(x / (float)texture.width);
     }
 
+    public void setX(float x){
+        setU(x / texture.width);
+    }
+
     public int getY(){
         return Math.round(v * texture.height);
     }
 
     public void setY(int y){
         setV(y / (float)texture.height);
+    }
+
+    public void setY(float y){
+        setV(y / texture.height);
     }
 
     public void setWidth(int width){
@@ -194,6 +204,22 @@ public class TextureRegion{
             setV(v2 + height / (float)texture.height);
         }else{
             setV2(v + height / (float)texture.height);
+        }
+    }
+
+    public void setWidth(float width){
+        if(isFlipX()){
+            setU(u2 + width / texture.width);
+        }else{
+            setU2(u + width / texture.width);
+        }
+    }
+
+    public void setHeight(float height){
+        if(isFlipY()){
+            setV(v2 + height / texture.height);
+        }else{
+            setV2(v + height / texture.height);
         }
     }
 

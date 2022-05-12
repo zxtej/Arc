@@ -99,16 +99,6 @@ public class Seq<T> implements Iterable<T>, Eachable<T>{
         System.arraycopy(array, start, items, 0, size);
     }
 
-    /** @see #Seq(Class) */
-    public static <T> Seq<T> of(Class<T> arrayType){
-        return new Seq<>(arrayType);
-    }
-
-    /** @see #Seq(boolean, int, Class) */
-    public static <T> Seq<T> of(boolean ordered, int capacity, Class<T> arrayType){
-        return new Seq<>(ordered, capacity, arrayType);
-    }
-
     public static <T> Seq<T> withArrays(Object... arrays){
         Seq<T> result = new Seq<>();
         for(Object a : arrays){
@@ -137,9 +127,9 @@ public class Seq<T> implements Iterable<T>, Eachable<T>{
     /** @see #Seq(Object[]) */
     public static <T> Seq<T> select(T[] array, Boolf<T> test){
         Seq<T> out = new Seq<>(array.length);
-        for(int i = 0; i < array.length; i++){
-            if(test.get(array[i])){
-                out.add(array[i]);
+        for(T t : array){
+            if(test.get(t)){
+                out.add(t);
             }
         }
         return out;
@@ -201,11 +191,10 @@ public class Seq<T> implements Iterable<T>, Eachable<T>{
     }
 
     /** Replaces values without creating a new array. */
-    public Seq<T> replace(Func<T, T> mapper){
+    public void replace(Func<T, T> mapper){
         for(int i = 0; i < size; i++){
             items[i] = mapper.get(items[i]);
         }
-        return this;
     }
 
     /** Flattens this array of arrays into one array. Allocates a new instance. */
@@ -262,7 +251,12 @@ public class Seq<T> implements Iterable<T>, Eachable<T>{
     }
 
     public boolean contains(Boolf<T> predicate){
-        return find(predicate) != null;
+        for(int i = 0; i < size; i++){
+            if(predicate.get(items[i])){
+                return true;
+            }
+        }
+        return false;
     }
 
     public T min(Comparator<T> func){
@@ -330,7 +324,7 @@ public class Seq<T> implements Iterable<T>, Eachable<T>{
         return result;
     }
 
-    public T find(Boolf<T> predicate){
+    public @Nullable T find(Boolf<T> predicate){
         for(int i = 0; i < size; i++){
             if(predicate.get(items[i])){
                 return items[i];
@@ -344,45 +338,45 @@ public class Seq<T> implements Iterable<T>, Eachable<T>{
         return this;
     }
 
-    public Seq<T> and(T value){
-        add(value);
-        return this;
+    /**
+     * Adds a value if it was not already in this sequence.
+     * @return whether this value was added successfully.
+     */
+    public boolean addUnique(T value){
+        if(!contains(value)){
+            add(value);
+            return true;
+        }
+        return false;
     }
 
-    public Seq<T> and(Seq<T> value){
-        addAll(value);
-        return this;
-    }
-
-    public Seq<T> and(T[] value){
-        addAll(value);
-        return this;
-    }
-
-    public void add(T value){
+    public Seq<T> add(T value){
         T[] items = this.items;
         if(size == items.length) items = resize(Math.max(8, (int)(size * 1.75f)));
         items[size++] = value;
+        return this;
     }
 
-    public void add(T value1, T value2){
+    public Seq<T> add(T value1, T value2){
         T[] items = this.items;
         if(size + 1 >= items.length) items = resize(Math.max(8, (int)(size * 1.75f)));
         items[size] = value1;
         items[size + 1] = value2;
         size += 2;
+        return this;
     }
 
-    public void add(T value1, T value2, T value3){
+    public Seq<T> add(T value1, T value2, T value3){
         T[] items = this.items;
         if(size + 2 >= items.length) items = resize(Math.max(8, (int)(size * 1.75f)));
         items[size] = value1;
         items[size + 1] = value2;
         items[size + 2] = value3;
         size += 3;
+        return this;
     }
 
-    public void add(T value1, T value2, T value3, T value4){
+    public Seq<T> add(T value1, T value2, T value3, T value4){
         T[] items = this.items;
         if(size + 3 >= items.length) items = resize(Math.max(8, (int)(size * 1.8f))); // 1.75 isn't enough when size=5.
         items[size] = value1;
@@ -390,6 +384,17 @@ public class Seq<T> implements Iterable<T>, Eachable<T>{
         items[size + 2] = value3;
         items[size + 3] = value4;
         size += 4;
+        return this;
+    }
+
+    public Seq<T> add(Seq<? extends T> array){
+        addAll(array.items, 0, array.size);
+        return this;
+    }
+
+    public Seq<T> add(T[] array){
+        addAll(array, 0, array.length);
+        return this;
     }
 
     public Seq<T> addAll(Seq<? extends T> array){
@@ -430,15 +435,15 @@ public class Seq<T> implements Iterable<T>, Eachable<T>{
     }
 
     /** Sets this array's contents to the specified array. */
-    public Seq<T> set(Seq<? extends T> array){
+    public void set(Seq<? extends T> array){
         clear();
-        return addAll(array);
+        addAll(array);
     }
 
     /** Sets this array's contents to the specified array. */
-    public Seq<T> set(T[] array){
+    public void set(T[] array){
         clear();
-        return addAll(array);
+        addAll(array);
     }
 
     @Nullable
@@ -909,6 +914,7 @@ public class Seq<T> implements Iterable<T>, Eachable<T>{
             items[i] = items[ii];
             items[ii] = temp;
         }
+
         return this;
     }
 
@@ -920,6 +926,7 @@ public class Seq<T> implements Iterable<T>, Eachable<T>{
             items[i] = items[ii];
             items[ii] = temp;
         }
+
         return this;
     }
 
@@ -927,13 +934,12 @@ public class Seq<T> implements Iterable<T>, Eachable<T>{
      * Reduces the size of the array to the specified size. If the array is already smaller than the specified size, no action is
      * taken.
      */
-    public Seq<T> truncate(int newSize){
+    public void truncate(int newSize){
         if(newSize < 0) throw new IllegalArgumentException("newSize must be >= 0: " + newSize);
-        if(size <= newSize) return this;
+        if(size <= newSize) return;
         for(int i = newSize; i < size; i++)
             items[i] = null;
         size = newSize;
-        return this;
     }
 
     public T random(Rand rand){

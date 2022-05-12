@@ -246,30 +246,20 @@ public class Cell<T extends Element> implements Poolable{
         return this;
     }
 
-    /** @deprecated text fields have this on by default. */
-    @Deprecated
-    public Cell<T> addInputDialog(){
-        if(element instanceof TextField){
-            ((TextField)element).addInputDialog();
-        }
-        return this;
-    }
-
-    /** @deprecated text fields have this on by default. */
-    @Deprecated
-    public Cell<T> addInputDialog(int maxLength){
-        if(element instanceof TextField){
-            ((TextField)element).setMaxLength(maxLength);
-            ((TextField)element).addInputDialog();
-        }
-        return this;
-    }
-
     public Cell<T> wrap(){
         if(get() instanceof Label){
             ((Label)get()).setWrap(true);
         }else if(get() instanceof TextButton){
             ((TextButton)get()).getLabel().setWrap(true);
+        }
+        return this;
+    }
+
+    public Cell<T> ellipsis(boolean ellipsis){
+        if(get() instanceof Label){
+            ((Label)get()).setEllipsis(ellipsis);
+        }else if(get() instanceof TextButton){
+            ((TextButton)get()).getLabel().setEllipsis(ellipsis);
         }
         return this;
     }

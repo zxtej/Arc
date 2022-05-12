@@ -21,6 +21,8 @@ public class Angles{
     }
 
     public static float angleDist(float a, float b){
+        a = Mathf.mod(a, 360f);
+        b = Mathf.mod(b, 360f);
         return Math.min((a - b) < 0 ? a - b + 360 : a - b, (b - a) < 0 ? b - a + 360 : b - a);
     }
 
@@ -82,24 +84,6 @@ public class Angles{
         return angle(avector.x, avector.y, Core.input.mouseX(), Core.input.mouseY());
     }
 
-    public static void loop(int max, Intc i){
-        for(int j = 0; j < max; j++){
-            i.get(j);
-        }
-    }
-
-    public static void circle(int points, float offset, Floatc cons){
-        for(int i = 0; i < points; i++){
-            cons.get(offset + i * 360f / points);
-        }
-    }
-
-    public static void circle(int points, Floatc cons){
-        for(int i = 0; i < points; i++){
-            cons.get(i * 360f / points);
-        }
-    }
-
     public static void circleVectors(int points, float length, Floatc2 pos){
         for(int i = 0; i < points; i++){
             float f = i * 360f / points;
@@ -111,12 +95,6 @@ public class Angles{
         for(int i = 0; i < points; i++){
             float f = i * 360f / points + offset;
             pos.get(trnsx(f, length), trnsy(f, length));
-        }
-    }
-
-    public static void shotgun(int points, float spacing, float offset, Floatc cons){
-        for(int i = 0; i < points; i++){
-            cons.get(i * spacing - (points - 1) * spacing / 2f + offset);
         }
     }
 
