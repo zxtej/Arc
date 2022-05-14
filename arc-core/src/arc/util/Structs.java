@@ -31,12 +31,7 @@ public class Structs{
         }
     }
 
-    public static <T> T random(T[] array){
-        if(array.length == 0) return null;
-        return array[Mathf.random(array.length - 1)];
-    }
-
-    public static <T> T select(T... array){
+    public static <T> T random(T... array){
         if(array.length == 0) return null;
         return array[Mathf.random(array.length - 1)];
     }
@@ -116,6 +111,10 @@ public class Structs{
 
     public static <T> Comparator<T> comparingInt(Intf<? super T> keyExtractor){
         return (c1, c2) -> Integer.compare(keyExtractor.get(c1), keyExtractor.get(c2));
+    }
+
+    public static <T> Comparator<T> comparingLong(Longf<? super T> keyExtractor){
+        return (c1, c2) -> Long.compare(keyExtractor.get(c1), keyExtractor.get(c2));
     }
 
     public static <T> Comparator<T> comparingBool(Boolf<? super T> keyExtractor){

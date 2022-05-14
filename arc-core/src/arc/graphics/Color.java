@@ -1,6 +1,6 @@
 package arc.graphics;
 
-import arc.math.Mathf;
+import arc.math.*;
 import arc.math.geom.*;
 
 /**
@@ -161,6 +161,18 @@ public class Color{
     public static float toFloatBits(float r, float g, float b, float a){
         int color = ((int)(255 * a) << 24) | ((int)(255 * b) << 16) | ((int)(255 * g) << 8) | ((int)(255 * r));
         return intToFloatColor(color);
+    }
+
+    public static double toDoubleBits(float r, float g, float b, float a){
+        return Double.longBitsToDouble(Color.rgba8888(r, g, b, a) & 0x00000000_ffffffffL);
+    }
+
+    public static double toDoubleBits(int r, int g, int b, int a){
+        return toDoubleBits(r / 255f, g / 255f, b / 255f, a / 255f);
+    }
+
+    public Color fromDouble(double value){
+        return rgba8888((int)(Double.doubleToRawLongBits(value)));
     }
 
     /**
@@ -586,6 +598,11 @@ public class Color{
         return this;
     }
 
+    public Color mulA(float a){
+        this.a *= a;
+        return this;
+    }
+
     /**
      * Multiplies this Color's color components by the given ones.
      * @param r Red component
@@ -729,6 +746,10 @@ public class Color{
     public float toFloatBits(){
         int color = ((int)(255 * a) << 24) | ((int)(255 * b) << 16) | ((int)(255 * g) << 8) | ((int)(255 * r));
         return intToFloatColor(color);
+    }
+
+    public double toDoubleBits(){
+        return toDoubleBits(r, g, b, a);
     }
 
     /**

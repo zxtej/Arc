@@ -1,10 +1,10 @@
 package arc.math.geom;
 
-import arc.struct.Seq;
-import arc.func.Cons;
-import arc.math.geom.QuadTree.QuadTreeObject;
+import arc.func.*;
+import arc.math.geom.QuadTree.*;
+import arc.struct.*;
 
-import java.util.Iterator;
+import java.util.*;
 
 /**
  * A basic quad tree.
@@ -23,12 +23,13 @@ public class QuadTree<T extends QuadTreeObject>{
     public Seq<T> objects = new Seq<>(false);
     public QuadTree<T> botLeft, botRight, topLeft, topRight;
     public boolean leaf = true;
+    public int totalObjects;
 
     public QuadTree(Rect bounds){
         this.bounds = bounds;
     }
 
-    private void split(){
+    protected void split(){
         if(!leaf) return;
 
         float subW = bounds.width / 2;
@@ -54,7 +55,7 @@ public class QuadTree<T extends QuadTreeObject>{
         }
     }
 
-    private void unsplit(){
+    protected void unsplit(){
         if(leaf) return;
         objects.addAll(botLeft.objects);
         objects.addAll(botRight.objects);
@@ -78,6 +79,8 @@ public class QuadTree<T extends QuadTreeObject>{
             return;
         }
 
+        totalObjects ++;
+
         if(leaf && objects.size + 1 > maxObjectsPerNode) split();
 
         if(leaf){
@@ -98,29 +101,35 @@ public class QuadTree<T extends QuadTreeObject>{
     /**
      * Removes an object from this node or its child nodes.
      */
-    public void remove(T obj){
+    public boolean remove(T obj){
+        boolean result;
         if(leaf){
             // Leaf, no children, remove from root
-            objects.remove(obj, true);
+            result = objects.remove(obj, true);
         }else{
             // Remove from relevant child
             hitbox(obj);
             QuadTree<T> child = getFittingChild(tmp);
 
             if(child != null){
-                child.remove(obj);
+                result = child.remove(obj);
             }else{
                 // Or root if object doesn't fit in a child
-                objects.remove(obj, true);
+                result = objects.remove(obj, true);
             }
 
-            if(getTotalObjectCount() <= maxObjectsPerNode) unsplit();
+            if(totalObjects <= maxObjectsPerNode) unsplit();
         }
+        if(result){
+            totalObjects --;
+        }
+        return result;
     }
 
     /** Removes all objects. */
     public void clear(){
         objects.clear();
+        totalObjects = 0;
         if(!leaf){
             topLeft.clear();
             topRight.clear();
@@ -130,7 +139,7 @@ public class QuadTree<T extends QuadTreeObject>{
         leaf = true;
     }
 
-    private QuadTree<T> getFittingChild(Rect boundingBox){
+    protected QuadTree<T> getFittingChild(Rect boundingBox){
         float verticalMidpoint = bounds.x + (bounds.width / 2);
         float horizontalMidpoint = bounds.y + (bounds.height / 2);
 
@@ -183,6 +192,30 @@ public class QuadTree<T extends QuadTreeObject>{
     }
 
     /**
+     * @return whether an object overlaps this rectangle.
+     * This will never result in false positives.
+     */
+    public boolean any(float x, float y, float width, float height){
+        if(!leaf){
+            if(topLeft.bounds.overlaps(x, y, width, height) && topLeft.any(x, y, width, height)) return true;
+            if(topRight.bounds.overlaps(x, y, width, height) && topRight.any(x, y, width, height)) return true;
+            if(botLeft.bounds.overlaps(x, y, width, height) && botLeft.any(x, y, width, height)) return true;
+            if(botRight.bounds.overlaps(x, y, width, height) && botRight.any(x, y, width, height))return true;
+        }
+
+        Seq<?> objects = this.objects;
+
+        for(int i = 0; i < objects.size; i++){
+            T item = (T)objects.items[i];
+            hitbox(item);
+            if(tmp.overlaps(x, y, width, height)){
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Processes objects that may intersect the given rectangle.
      * <p>
      * This will never result in false positives.
@@ -220,17 +253,6 @@ public class QuadTree<T extends QuadTreeObject>{
                 out.add(item);
             }
         }
-    }
-
-    /**
-     * Returns the total number of objects in this node and all child nodes, recursively
-     */
-    public int getTotalObjectCount(){
-        int count = objects.size;
-        if(!leaf){
-            count += botLeft.getTotalObjectCount() + topRight.getTotalObjectCount() + topLeft.getTotalObjectCount() + botRight.getTotalObjectCount();
-        }
-        return count;
     }
 
     /** Adds all quadtree objects to the specified Seq. */

@@ -576,13 +576,17 @@ public class TexturePacker{
         public int maxWidth = 1024, maxHeight = 1024;
         public boolean square = false;
         public boolean stripWhitespaceX, stripWhitespaceY;
+        /** Whether to strip whitespace in a way that keeps the region rectangle centered. */
+        public boolean stripWhitespaceCenter;
+        /** Paths containing these strings do not have whitespace stripped. */
+        public String[] ignoredWhitespaceStrings = {};
         public int alphaThreshold;
         public TextureFilter filterMin = TextureFilter.nearest, filterMag = TextureFilter.nearest;
         public TextureWrap wrapX = TextureWrap.clampToEdge, wrapY = TextureWrap.clampToEdge;
         public boolean alias = true;
         public String outputFormat = "png";
         public boolean ignoreBlankImages = true;
-        public boolean fast = true; //with fast = false packing takes an eternity, I have no idea why that wasn't the deafult before
+        public boolean fast = true; //with fast = false packing takes an eternity, I have no idea why that wasn't the default before
         public boolean silent;
         public boolean printAliases;
         public boolean combineSubdirectories;

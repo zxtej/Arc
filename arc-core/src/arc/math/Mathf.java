@@ -386,28 +386,16 @@ public final class Mathf{
         return value != 0 && (value & value - 1) == 0;
     }
 
-    public static short clamp(short value, short min, short max){
-        if(value < min) return min;
-        if(value > max) return max;
-        return value;
-    }
-
     public static int clamp(int value, int min, int max){
-        if(value < min) return min;
-        if(value > max) return max;
-        return value;
+        return Math.max(Math.min(value, max), min);
     }
 
     public static long clamp(long value, long min, long max){
-        if(value < min) return min;
-        if(value > max) return max;
-        return value;
+        return Math.max(Math.min(value, max), min);
     }
 
     public static float clamp(float value, float min, float max){
-        if(value < min) return min;
-        if(value > max) return max;
-        return value;
+        return Math.max(Math.min(value, max), min);
     }
 
     /** Clamps to [0, 1]. */
@@ -416,9 +404,7 @@ public final class Mathf{
     }
 
     public static double clamp(double value, double min, double max){
-        if(value < min) return min;
-        if(value > max) return max;
-        return value;
+        return Math.max(Math.min(value, max), min);
     }
 
     public static float maxZero(float val){
@@ -576,7 +562,12 @@ public final class Mathf{
 
     /** @return the logarithm of value with base 2 */
     public static float log2(float value){
-        return (float)Math.log(value) / 0.301029996f;
+        return log(2, value);
+    }
+
+    /** @return base-2 logarithm of the specified integer */
+    public static int log2(int value){
+        return value == 0 ? 0 : 31 - Integer.numberOfLeadingZeros(value);
     }
 
     /** Mod function that works properly for negative numbers. */

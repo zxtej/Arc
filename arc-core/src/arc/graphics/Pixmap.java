@@ -13,9 +13,8 @@ import java.nio.*;
 
 /**
  * <p>
- * A Pixmap represents an image in memory. It has a width and height expressed in pixels as well as a {@link Format} specifying
- * the number and order of color components per pixel. Coordinates of pixels are specified with respect to the top left corner of
- * the image, with the x-axis pointing to the right and the y-axis pointing downwards.
+ * A Pixmap represents an image in memory. It has a width and height expressed in pixels, with each pixel being stored in RGBA8888 format.
+ * Coordinates of pixels are specified with respect to the top left corner of the image, with the x-axis pointing to the right and the y-axis pointing downwards.
  * </p>
  *
  * <p>
@@ -67,8 +66,7 @@ public class Pixmap implements Disposable{
     }
 
     /**
-     * Creates a new Pixmap instance from the given file. The file must be a Png, Jpeg or Bitmap. Paletted formats are not
-     * supported.
+     * Creates a new Pixmap instance from the given file. The file must be a Png, Jpeg or Bitmap.
      * @param file the {@link Fi}
      */
     public Pixmap(Fi file){
@@ -87,51 +85,6 @@ public class Pixmap implements Disposable{
 
         buffer.position(0).limit(buffer.capacity());
     }
-
-    //region deprecated code kept for compatibility
-
-    /** @deprecated the pixmap format parameter is redundant, don't use it. */
-    @Deprecated
-    public Pixmap(int width, int height, Format format){
-        this(width, height);
-    }
-
-    /** @deprecated always returns rgba8888 */
-    @Deprecated
-    public Format getFormat(){
-        return Format.rgba8888;
-    }
-
-    @Deprecated
-    public enum Blending{
-        none, sourceOver
-    }
-
-    /** @deprecated does nothing */
-    @Deprecated
-    public void setBlending(Blending blend){
-
-    }
-
-    /** @deprecated use get instead */
-    @Deprecated
-    public int getPixel(int x, int y){
-        return get(x, y);
-    }
-
-    /** @deprecated use set instead */
-    @Deprecated
-    public void draw(int x, int y, int color){
-        set(x, y, color);
-    }
-
-    /** @deprecated use set instead */
-    @Deprecated
-    public void draw(int x, int y, Color color){
-        set(x, y, color);
-    }
-
-    //endregion
 
     /** @return a newly allocated copy with the same pixels. */
     public Pixmap copy(){
@@ -674,7 +627,7 @@ public class Pixmap implements Disposable{
     /**
      * Returns the OpenGL ES format of this Pixmap. Used as the seventh parameter to
      * {@link GL20#glTexImage2D(int, int, int, int, int, int, int, int, java.nio.Buffer)}.
-     * @return one of GL_ALPHA, GL_RGB, GL_RGBA, GL_LUMINANCE, or GL_LUMINANCE_ALPHA.
+     * @return GL_RGBA
      */
     public int getGLFormat(){
         return Gl.rgba;
@@ -683,7 +636,7 @@ public class Pixmap implements Disposable{
     /**
      * Returns the OpenGL ES format of this Pixmap. Used as the third parameter to
      * {@link GL20#glTexImage2D(int, int, int, int, int, int, int, int, java.nio.Buffer)}.
-     * @return one of GL_ALPHA, GL_RGB, GL_RGBA, GL_LUMINANCE, or GL_LUMINANCE_ALPHA.
+     * @return GL_RGBA
      */
     public int getGLInternalFormat(){
         return Gl.rgba;
@@ -692,7 +645,7 @@ public class Pixmap implements Disposable{
     /**
      * Returns the OpenGL ES type of this Pixmap. Used as the eighth parameter to
      * {@link GL20#glTexImage2D(int, int, int, int, int, int, int, int, java.nio.Buffer)}.
-     * @return one of GL_UNSIGNED_BYTE, GL_UNSIGNED_SHORT_5_6_5, GL_UNSIGNED_SHORT_4_4_4_4
+     * @return GL_UNSIGNED_BYTE
      */
     public int getGLType(){
         return Gl.unsignedByte;
@@ -820,7 +773,7 @@ public class Pixmap implements Disposable{
         if(ArcNativesLoader.loaded){
             long[] nativeData = new long[3];
             pixels = createJni(nativeData, width, height);
-            if(pixels == null) throw new ArcRuntimeException("Error loading pixmap.");
+            if(pixels == null) throw new ArcRuntimeException("Error creating pixmap (out of memory?)");
             pixels.limit(pixels.capacity());
 
             this.handle = nativeData[0];

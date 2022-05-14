@@ -5,6 +5,7 @@ import arc.graphics.gl.*;
 import arc.struct.*;
 
 public class SortedSpriteBatch extends SpriteBatch{
+
     protected Seq<DrawRequest> requestPool = new Seq<>(10000);
     protected Seq<DrawRequest> requests = new Seq<>(DrawRequest.class);
     protected boolean sort;
@@ -21,7 +22,7 @@ public class SortedSpriteBatch extends SpriteBatch{
     @Override
     protected void setShader(Shader shader, boolean apply){
         if(!flushing && sort){
-            throw new IllegalArgumentException("Shaders cannot be set while sorting is enabled. Set shaders inside Draw.run(...).");
+            throw new IllegalArgumentException("Shaders cannot be set while sorting is enabled. Set shaders inside Draw.draw(z, ...).");
         }
         super.setShader(shader, apply);
     }
@@ -50,6 +51,12 @@ public class SortedSpriteBatch extends SpriteBatch{
 
     @Override
     protected void draw(TextureRegion region, float x, float y, float originX, float originY, float width, float height, float rotation){
+        //0 alpha sprites are skipped
+        //this *might* interfere with weird custom blending...
+        if((Float.floatToRawIntBits(colorPacked) & 0xFF000000) == 0 && customShader == null){
+            return;
+        }
+
         if(sort && !flushing){
             DrawRequest req = obtain();
             req.x = x;

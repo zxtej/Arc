@@ -165,9 +165,9 @@ public class DelayedRemovalSeq<T> extends Seq<T>{
         return super.shuffle();
     }
 
-    public Seq<T> truncate(int newSize){
+    public void truncate(int newSize){
         if(iterating > 0) throw new IllegalStateException("Invalid between begin/end.");
-        return super.truncate(newSize);
+        super.truncate(newSize);
     }
 
     public T[] setSize(int newSize){

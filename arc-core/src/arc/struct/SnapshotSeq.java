@@ -162,9 +162,9 @@ public class SnapshotSeq<T> extends Seq<T>{
         return super.shuffle();
     }
 
-    public Seq<T> truncate(int newSize){
+    public void truncate(int newSize){
         modified();
-        return super.truncate(newSize);
+        super.truncate(newSize);
     }
 
     public T[] setSize(int newSize){

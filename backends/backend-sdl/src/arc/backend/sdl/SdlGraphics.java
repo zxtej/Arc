@@ -193,48 +193,16 @@ public class SdlGraphics extends Graphics{
     }
 
     @Override
-    public boolean supportsDisplayModeChange(){
-        return true;
-    }
+    public boolean setFullscreen(){
+        int[] bounds = new int[4];
 
-    @Override
-    public Monitor getPrimaryMonitor(){
-        return getMonitor();
-    }
+        int index = SDL_GetWindowDisplayIndex(app.window);
+        if(index < 0) return false;
 
-    @Override
-    public Monitor getMonitor(){
-        return new Monitor(0, 0, "Monitor");
-    }
+        int result = SDL_GetDisplayBounds(index, bounds);
+        if(result != 0) return false;
 
-    @Override
-    public Monitor[] getMonitors(){
-        return new Monitor[0];
-    }
-
-    @Override
-    public DisplayMode[] getDisplayModes(){
-        return new DisplayMode[0];
-    }
-
-    @Override
-    public DisplayMode[] getDisplayModes(Monitor monitor){
-        return new DisplayMode[0];
-    }
-
-    @Override
-    public DisplayMode getDisplayMode(){
-        return new DisplayMode(getWidth(), getHeight(), 60, 32);
-    }
-
-    @Override
-    public DisplayMode getDisplayMode(Monitor monitor){
-        return getDisplayMode();
-    }
-
-    @Override
-    public boolean setFullscreenMode(DisplayMode displayMode){
-        //TODO ignores display mode
+        SDL_SetWindowSize(app.window, bounds[2], bounds[3]);
         SDL_SetWindowFullscreen(app.window, SDL_WINDOW_FULLSCREEN);
         return true;
     }

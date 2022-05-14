@@ -590,6 +590,11 @@ public class Fi{
         return out;
     }
 
+    /** Equivalent to {@link #list()}, but returns a Seq. */
+    public Seq<Fi> seq(){
+        return Seq.with(list());
+    }
+
     /**
      * Returns the paths to the children of this directory. Returns an empty list if this file handle represents a file and not a
      * directory. On the desktop, an {@link FileType#internal} handle to a directory on the classpath will return a zero length
@@ -842,6 +847,19 @@ public class Fi{
             if(!dest.isDirectory()) throw new ArcRuntimeException("Destination directory cannot be created: " + dest);
         }
         copyDirectory(this, dest.child(name()));
+    }
+
+    /**
+     * Copies the contents of this folder into another folder. Unlike copyTo, this only copies the *contents*, not this folder itself.
+     * @throws ArcRuntimeException if this or {@param dest} is not a valid directory, or copying fails.
+     * */
+    public void copyFilesTo(Fi dest){
+        if(!isDirectory()) throw new ArcRuntimeException("Source folder must be a directory: " + this);
+        if(dest.exists() && !dest.isDirectory()) throw new ArcRuntimeException("Destination folder must be a directory: " + dest);
+
+        dest.mkdirs();
+
+        copyDirectory(this, dest);
     }
 
     /**

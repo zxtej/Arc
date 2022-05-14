@@ -246,6 +246,10 @@ public class Draw{
         blend(Blending.normal);
     }
 
+    public static Blending getBlend(){
+        return batch.getBlending();
+    }
+
     public static void reset(){
         color();
         mixcol();
@@ -264,8 +268,13 @@ public class Draw{
 
     /** Draws a portion of a world-sized texture. */
     public static void fbo(Texture texture, int worldWidth, int worldHeight, int tilesize){
+        fbo(texture, worldWidth, worldHeight, tilesize, 0f);
+    }
+
+    /** Draws a portion of a world-sized texture. */
+    public static void fbo(Texture texture, int worldWidth, int worldHeight, int tilesize, float offset){
         float ww = worldWidth * tilesize, wh = worldHeight * tilesize;
-        float x = camera.position.x + tilesize / 2f, y = camera.position.y + tilesize / 2f;
+        float x = camera.position.x + offset, y = camera.position.y + offset;
         float u = (x - camera.width / 2f) / ww,
         v = (y - camera.height / 2f) / wh,
         u2 = (x + camera.width / 2f) / ww,
@@ -363,7 +372,7 @@ public class Draw{
     }
 
     public static void proj(float x, float y, float w, float h){
-        Draw.flush();
+        flush();
         batch.getProjection().setOrtho(x, y, w, h);
     }
 

@@ -10,10 +10,9 @@ public class Lines{
     public static boolean useLegacyLine = false;
 
     private static float stroke = 1f;
-    private static Vec2 vector = new Vec2(), u = new Vec2(), v = new Vec2(), inner = new Vec2(), outer = new Vec2();
+    private static Vec2 vector = new Vec2(), u = new Vec2(), v = new Vec2();
     private static FloatSeq floats = new FloatSeq(20);
     private static FloatSeq floatBuilder = new FloatSeq(20);
-    private static FloatSeq tmpFloats = new FloatSeq(20);
     private static boolean building;
     private static float circlePrecision = 0.4f;
 
@@ -81,36 +80,36 @@ public class Lines{
 
             if(cap){
                 Fill.quad(
-                        region,
+                region,
 
-                        x - diffx - diffy,
-                        y - diffy + diffx,
+                x - diffx - diffy,
+                y - diffy + diffx,
 
-                        x - diffx + diffy,
-                        y - diffy - diffx,
+                x - diffx + diffy,
+                y - diffy - diffx,
 
-                        x2 + diffx + diffy,
-                        y2 + diffy - diffx,
+                x2 + diffx + diffy,
+                y2 + diffy - diffx,
 
-                        x2 + diffx - diffy,
-                        y2 + diffy + diffx
+                x2 + diffx - diffy,
+                y2 + diffy + diffx
 
                 );
             }else{
                 Fill.quad(
-                        region,
+                region,
 
-                        x - diffy,
-                        y + diffx,
+                x - diffy,
+                y + diffx,
 
-                        x + diffy,
-                        y - diffx,
+                x + diffy,
+                y - diffx,
 
-                        x2 + diffy,
-                        y2 - diffx,
+                x2 + diffy,
+                y2 - diffx,
 
-                        x2 - diffy,
-                        y2 + diffx
+                x2 - diffy,
+                y2 + diffx
 
                 );
             }
@@ -146,11 +145,9 @@ public class Lines{
         polyline(points.items, points.size, wrap);
     }
 
-    private static final Vec2 AB = new Vec2(), BC = new Vec2();
-    private static final Vec2 A = new Vec2(), B = new Vec2(), C = new Vec2(), E = new Vec2(), D = new Vec2();
-    private static final Vec2 vec1 = new Vec2();
-    private static final Vec2 D0 = new Vec2(), E0 = new Vec2();
-    private static final Vec2 q1 = new Vec2(), q2 = new Vec2(), q3 = new Vec2(), q4 = new Vec2();
+    private static final Vec2 AB = new Vec2(), BC = new Vec2(),
+    A = new Vec2(), B = new Vec2(), C = new Vec2(), E = new Vec2(), D = new Vec2(), vec1 = new Vec2(),
+    D0 = new Vec2(), E0 = new Vec2(), q1 = new Vec2(), q2 = new Vec2(), q3 = new Vec2(), q4 = new Vec2();
 
     //implementation taken from https://github.com/earlygrey/shapedrawer/blob/master/drawer/src/space/earlygrey/shapedrawer/ShapeDrawer.java
     public static void polyline(float[] points, int length, boolean wrap){
@@ -261,30 +258,28 @@ public class Lines{
     public static void dashLine(float x1, float y1, float x2, float y2, int divisions){
         float dx = x2 - x1, dy = y2 - y1;
 
-        for(int i = 0; i < divisions; i++){
-            if(i % 2 == 0){
-                line(x1 + ((float)i / divisions) * dx, y1 + ((float)i / divisions) * dy,
-                        x1 + ((i + 1f) / divisions) * dx, y1 + ((i + 1f) / divisions) * dy);
-            }
+        for(int i = 0; i < divisions; i += 2){
+            line(x1 + ((float)i / divisions) * dx, y1 + ((float)i / divisions) * dy,
+            x1 + ((i + 1f) / divisions) * dx, y1 + ((i + 1f) / divisions) * dy);
         }
     }
 
     public static void circle(float x, float y, float rad){
         poly(x, y, circleVertices(rad), rad);
     }
-
+    
     public static void ellipse(float x, float y, float rad, float width, float height, float rot){
         float sides = circleVertices(rad);
         float space = 360 / sides;
         for(int i = 0; i < sides; i++){
             float a = space * i;
             u.trns(rot,
-                    rad * width * Mathf.cosDeg(a),
-                    rad * height * Mathf.sinDeg(a)
+                rad * width * Mathf.cosDeg(a),
+                rad * height * Mathf.sinDeg(a)
             );
             v.trns(rot,
-                    rad * width * Mathf.cosDeg(a + space),
-                    rad * height * Mathf.sinDeg(a + space)
+                rad * width * Mathf.cosDeg(a + space),
+                rad * height * Mathf.sinDeg(a + space)
             );
             line(x + u.x, y + u.y, x + v.x, y + v.y);
         }
@@ -297,13 +292,12 @@ public class Lines{
 
         vector.set(0, 0);
 
-        for(int i = 0; i < sides; i++){
-            if(i % 2 == 0) continue;
-            vector.set(radius, 0).setAngle(360f / sides * i + 90);
+        for(int i = 0; i < sides; i += 2){
+            vector.set(radius, 0).rotate(360f / sides * i + 90);
             float x1 = vector.x;
             float y1 = vector.y;
 
-            vector.set(radius, 0).setAngle(360f / sides * (i + 1) + 90);
+            vector.set(radius, 0).rotate(360f / sides * (i + 1) + 90);
 
             line(x1 + x, y1 + y, vector.x + x, vector.y + y);
         }
@@ -314,8 +308,7 @@ public class Lines{
         float step = 360f / spikes;
 
         for(int i = 0; i < spikes; i++){
-            vector.setAngle(i * step + rot);
-            vector.setLength(radius);
+            vector.trns(i * step + rot, radius);
             float x1 = vector.x, y1 = vector.y;
             vector.setLength(radius + length);
 
@@ -344,10 +337,10 @@ public class Lines{
         for(int i = 0; i < sides; i++){
             float a = space * i + angle, cos = Mathf.cosDeg(a), sin = Mathf.sinDeg(a), cos2 = Mathf.cosDeg(a + space), sin2 = Mathf.sinDeg(a + space);
             Fill.quad(
-                    x + r1*cos, y + r1*sin,
-                    x + r1*cos2, y + r1*sin2,
-                    x + r2*cos2, y + r2*sin2,
-                    x + r2*cos, y + r2*sin
+            x + r1*cos, y + r1*sin,
+            x + r1*cos2, y + r1*sin2,
+            x + r2*cos2, y + r2*sin2,
+            x + r2*cos, y + r2*sin
             );
         }
     }
@@ -361,20 +354,6 @@ public class Lines{
             Vec2 current = vertices[i];
             Vec2 next = i == vertices.length - 1 ? vertices[0] : vertices[i + 1];
             line(current.x * scl + offsetx, current.y * scl + offsety, next.x * scl + offsetx, next.y * scl + offsety);
-        }
-    }
-
-    public static void polySeg(int sides, int from, int to, float x, float y, float radius, float angle){
-        vector.set(0, 0);
-
-        for(int i = from; i < to; i++){
-            vector.set(radius, 0).setAngle(360f / sides * i + angle + 90);
-            float x1 = vector.x;
-            float y1 = vector.y;
-
-            vector.set(radius, 0).setAngle(360f / sides * (i + 1) + angle + 90);
-
-            line(x1 + x, y1 + y, vector.x + x, vector.y + y);
         }
     }
 
@@ -432,15 +411,14 @@ public class Lines{
 
     public static void arc(float x, float y, float radius, float fraction, float rotation, int sides){
         int max = (int)(sides * fraction);
-        vector.set(0, 0);
         floats.clear();
 
         for(int i = 0; i <= max; i++){
-            vector.set(radius, 0).setAngle((float)i / max * fraction * 360f + rotation);
+            vector.trns((float)i / max * fraction * 360f + rotation, radius);
             float x1 = vector.x;
             float y1 = vector.y;
 
-            vector.set(radius, 0).setAngle((float)(i + 1) / max * fraction * 360f + rotation);
+            vector.trns((float)(i + 1) / max * fraction * 360f + rotation, radius);
 
             floats.add(x1 + x, y1 + y);
         }

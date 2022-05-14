@@ -10,6 +10,7 @@ import java.net.*;
 import java.nio.*;
 import java.nio.channels.*;
 import java.util.*;
+import java.util.concurrent.*;
 
 /**
  * Simple class for handling Discord Rich Presence.
@@ -50,7 +51,9 @@ public final class DiscordRPC{
 
         checkConnected(false);
         try{
-            pipe = Pipe.openPipe(clientId);
+            FutureTask<Pipe> task = new FutureTask<>(() -> Pipe.openPipe(clientId));
+            task.run();
+            pipe = task.get(500, TimeUnit.MILLISECONDS);
         }catch(Exception e){
             throw new NoDiscordClientException();
         }

@@ -26,6 +26,14 @@ public class Strings{
         return total;
     }
 
+    public static String truncate(String s, int length){
+        return s.length() <= length ? s : s.substring(0, length);
+    }
+
+    public static String truncate(String s, int length, String ellipsis){
+        return s.length() <= length ? s : s.substring(0, length) + ellipsis;
+    }
+
     public static Seq<Throwable> getCauses(Throwable e){
         Seq<Throwable> arr = new Seq<>();
         while(e != null){
@@ -367,12 +375,16 @@ public class Strings{
     }
 
     public static int parseInt(String s, int radix, int defaultValue){
+        return parseInt(s, radix, defaultValue, 0, s.length());
+    }
+
+    public static int parseInt(String s, int radix, int defaultValue, int start, int end){
         boolean negative = false;
-        int i = 0, len = s.length(), limit = -2147483647;
+        int i = start, len = end - start, limit = -2147483647;
         if(len <= 0){
             return defaultValue;
         }else{
-            char firstChar = s.charAt(0);
+            char firstChar = s.charAt(i);
             if(firstChar < '0'){
                 if(firstChar == '-'){
                     negative = true;
@@ -386,17 +398,31 @@ public class Strings{
                 ++i;
             }
 
-            int digit, result;
-            for(result = 0; i < len; result -= digit){
+            int limitForMaxRadix = (-Integer.MAX_VALUE) / 36;
+            int limitBeforeMul = limitForMaxRadix;
+
+            int digit, result = 0;
+            while(i < end){
                 digit = Character.digit(s.charAt(i++), radix);
-                if(digit < 0){
-                    return defaultValue;
+                if(digit < 0) return defaultValue;
+                if(result < limitBeforeMul){
+                    if(limitBeforeMul == limitForMaxRadix){
+                        limitBeforeMul = limit / radix;
+
+                        if(result < limitBeforeMul){
+                            return defaultValue;
+                        }
+                    }else{
+                        return defaultValue;
+                    }
                 }
 
                 result *= radix;
                 if(result < limit + digit){
                     return defaultValue;
                 }
+
+                result -= digit;
             }
 
             return negative ? result : -result;
@@ -607,7 +633,7 @@ public class Strings{
         int index = 0;
         while(true){
             index = builder.indexOf(find, index);
-            if (index == -1) break;
+            if(index == -1) break;
             builder.replace(index, index + findLength, replace);
             index += replaceLength;
         }
@@ -620,8 +646,8 @@ public class Strings{
         int index = 0;
         while(true){
             while(true){
-                if (index == builder.length()) return builder;
-                if (builder.charAt(index) == find) break;
+                if(index == builder.length()) return builder;
+                if(builder.charAt(index) == find) break;
                 index++;
             }
             builder.replace(index, index + 1, replace);

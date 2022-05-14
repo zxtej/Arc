@@ -2,20 +2,24 @@ package arc.backend.sdl;
 
 import arc.*;
 import arc.audio.*;
+import arc.files.*;
 import arc.func.*;
 import arc.graphics.*;
+import arc.math.geom.*;
+import arc.scene.ui.*;
 import arc.struct.*;
 import arc.util.*;
-import arc.util.async.*;
 
+import java.io.*;
 import java.net.*;
+import java.util.*;
 
 import static arc.backend.sdl.jni.SDL.*;
 
 public class SdlApplication implements Application{
     private final Seq<ApplicationListener> listeners = new Seq<>();
     private final TaskQueue runnables = new TaskQueue();
-    private final int[] inputs = new int[34];
+    private final int[] inputs = new int[64];
 
     final SdlGraphics graphics;
     final SdlInput input;
@@ -41,6 +45,11 @@ public class SdlApplication implements Application{
 
         graphics.updateSize(config.width, config.height);
 
+        //can't be bothered to recompile arc for mac
+        if(!OS.isMac){
+            addTextInputListener();
+        }
+
         try{
             loop();
             listen(ApplicationListener::exit);
@@ -51,6 +60,32 @@ public class SdlApplication implements Application{
                 error.printStackTrace();
             }
         }
+    }
+
+    /** Used for Scene text fields. */
+    private void addTextInputListener(){
+        addListener(new ApplicationListener(){
+            TextField lastFocus;
+
+            @Override
+            public void update(){
+                if(Core.scene != null && Core.scene.getKeyboardFocus() instanceof TextField){
+                    TextField next = (TextField)Core.scene.getKeyboardFocus();
+                    if(lastFocus == null){
+                        SDL_StartTextInput();
+                    }
+                    lastFocus = next;
+                }else if(lastFocus != null){
+                    SDL_StopTextInput();
+                    lastFocus = null;
+                }
+
+                if(lastFocus != null){
+                    Vec2 pos = lastFocus.localToStageCoordinates(Tmp.v1.setZero());
+                    SDL_SetTextInputRect((int)pos.x, Core.graphics.getHeight() - 1 - (int)(pos.y + lastFocus.getHeight()), (int)lastFocus.getWidth(), (int)lastFocus.getHeight());
+                }
+            }
+        });
     }
 
     private void initIcon(){
@@ -70,6 +105,8 @@ public class SdlApplication implements Application{
 
     private void init(){
         ArcNativesLoader.load();
+
+        if(OS.isMac) restartMac();
 
         check(() -> SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS));
 
@@ -111,9 +148,6 @@ public class SdlApplication implements Application{
             SDL_GL_SetSwapInterval(1);
         }
 
-        //always have text input on
-        SDL_StartTextInput();
-
         int[] ver = new int[3];
         SDL_GetVersion(ver);
         Log.info("[Core] Initialized SDL v@.@.@", ver[0], ver[1], ver[2]);
@@ -142,7 +176,8 @@ public class SdlApplication implements Application{
                     inputs[0] == SDL_EVENT_MOUSE_BUTTON ||
                     inputs[0] == SDL_EVENT_MOUSE_WHEEL ||
                     inputs[0] == SDL_EVENT_KEYBOARD ||
-                    inputs[0] == SDL_EVENT_TEXT_INPUT){
+                    inputs[0] == SDL_EVENT_TEXT_INPUT ||
+                    inputs[0] == SDL_EVENT_TEXT_EDIT){
                     input.handleInput(inputs);
                 }
             }
@@ -260,8 +295,40 @@ public class SdlApplication implements Application{
     }
 
     public static class SdlError extends RuntimeException{
-        public SdlError() {
+        public SdlError(){
             super(SDL_GetError());
         }
+    }
+
+    /** MacOS doesn't work when -XstartOnFirstThread is not passed, this will restart the program with that argument if it isn't already present. */
+    @SuppressWarnings("unchecked")
+    private void restartMac(){
+        try{
+            Class<?> mgmt = Class.forName("java.lang.management.ManagementFactory");
+            Class<?> beanClass = Class.forName("java.lang.management.RuntimeMXBean");
+            Object bean = Reflect.invoke(mgmt, "getRuntimeMXBean");
+            String id = ((String)beanClass.getMethod("getName").invoke(bean)).split("@")[0];
+
+            if(!OS.hasEnv("JAVA_STARTED_ON_FIRST_THREAD_" + id) || OS.env("JAVA_STARTED_ON_FIRST_THREAD_" + id).equals("0")){ //check if equal to 0 just in case
+                Log.warn("Applying -XstartOnFirstThread for macOS support.");
+                String javaPath = //attempt to locate java
+                    new Fi(OS.prop("java.home")).child("bin/java").exists() ? new Fi(OS.prop("java.home")).child("bin/java").absolutePath() :
+                    Core.files.local("jre/bin/java").exists() ? Core.files.local("jre/bin/java").absolutePath() :
+                    "java";
+                try{
+                    Fi jar = Fi.get(SdlApplication.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath());
+                    Seq<String> launchOptions = Seq.with(javaPath);
+                    launchOptions.addAll((List<String>)beanClass.getMethod("getInputArguments").invoke(bean));
+                    launchOptions.addAll(System.getProperties().entrySet().stream().map(it -> "-D" + it).toArray(String[]::new));
+                    launchOptions.addAll("-XstartOnFirstThread", "-jar", jar.absolutePath(), "-firstThread");
+
+                    Process proc = new ProcessBuilder(launchOptions.toArray(String.class)).inheritIO().start();
+                    System.exit(proc.waitFor());
+                }catch(IOException | URISyntaxException e){ //some part of this failed, likely failed to find java
+                    Log.err(e);
+                    Log.err("Failed to apply the -XstartOnFirstThread argument, it is required in order to work on mac.");
+                }catch(InterruptedException ignored){}
+            }
+        }catch(Exception ignored){} //likely using bundled java, do nothing as the arg is already added
     }
 }

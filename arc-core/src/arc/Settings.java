@@ -5,7 +5,6 @@ import arc.func.*;
 import arc.struct.*;
 import arc.struct.ObjectMap.*;
 import arc.util.*;
-import arc.util.async.*;
 import arc.util.io.*;
 import arc.util.serialization.*;
 
@@ -18,6 +17,7 @@ import static arc.Core.*;
 
 public class Settings{
     protected final static byte typeBool = 0, typeInt = 1, typeLong = 2, typeFloat = 3, typeString = 4, typeBinary = 5;
+    protected final static int maxBackups = 10;
 
     //general state data
     protected Fi dataDirectory;
@@ -132,31 +132,29 @@ public class Settings{
 
             //back up the save file, as the values have now been loaded successfully
             getSettingsFile().copyTo(getBackupSettingsFile());
-            writeLog("Backed up " + getSettingsFile() + " to " + getBackupSettingsFile() + " (" + getSettingsFile().length() + " bytes)");
+            writeLog("Backed up " + getSettingsFile() + " to " + getBackupSettingsFile() + " (" + getBackupSettingsFile().length() + " bytes)");
         }catch(Throwable e){
             Log.err("Failed to load base settings file, attempting to load backup.", e);
             writeLog("Failed to load base file " + getSettingsFile() + ":\n" + Strings.getStackTrace(e));
 
-            try{
-                //attempt to load *latest* backup, which is updated more regularly but likely to be corrupt
-                loadValues(getLatestBackupSettingsFile());
-                //copy to normal settings file for future use
-                getLatestBackupSettingsFile().copyTo(getSettingsFile());
-                Log.info("Loaded latest backup settings file.");
-                writeLog("Loaded latest backup settings file after load failure. Length: " + getLatestBackupSettingsFile().length());
-            }catch(Throwable e2){
-                writeLog("Failed to load latest backup file " + getLatestBackupSettingsFile() + ":\n" + Strings.getStackTrace(e2));
-                Log.err("Failed to load latest backup settings file.", e2);
+            Seq<Fi> attempts = getBackupFolder().seq().add(getBackupSettingsFile());
+            //sort with latest modified file first
+            attempts.sort(Structs.comparingLong(f -> -f.lastModified()));
 
+            for(Fi attempt : attempts){
                 try{
-                    //attempt to load the old, reliable backup
-                    loadValues(getBackupSettingsFile());
-                    //copy to normal settings file for future use
-                    getBackupSettingsFile().copyTo(getSettingsFile());
-                    Log.info("Loaded backup settings file.");
-                    writeLog("Loaded backup settings file after load failure. Length: " + getBackupSettingsFile().length());
+                    writeLog("Attempting to load backup file: '" + attempt + "'. Length: " + attempt.length());
+
+                    loadValues(attempt);
+                    attempt.copyTo(getSettingsFile());
+
+                    Log.info("Loaded backup settings file successfully!");
+                    writeLog("| Loaded backup settings file after load failure. New settings file length: " + getSettingsFile().length());
+
+                    //break out of loop, we're done here
+                    return;
                 }catch(Throwable e3){
-                    writeLog("Failed to load backup file " + getSettingsFile() + ":\n" + Strings.getStackTrace(e3));
+                    writeLog("| Failed to load backup file " + attempts + ":\n" + Strings.getStackTrace(e3));
                     Log.err("Failed to load backup settings file.", e3);
                 }
             }
@@ -195,6 +193,8 @@ public class Settings{
                         stream.read(bytes);
                         values.put(key, bytes);
                         break;
+                    default:
+                        throw new IOException("Unknown key type: " + type);
                 }
             }
             //make sure all data was read - this helps with potential corruption
@@ -248,8 +248,22 @@ public class Settings{
         writeLog("Saving " + values.size() + " values; " + file.length() + " bytes");
 
         executor.submit(() -> {
-            //back up to latest file in another thread
-            file.copyTo(getLatestBackupSettingsFile());
+            //make sure two backups can't happen at once.
+            synchronized(this){
+                Fi backupFolder = getBackupFolder();
+
+                Seq<Fi> previous = backupFolder.seq();
+                //make sure first file is most recent, last is oldest
+                previous.sort(Structs.comparingLong(f -> -f.lastModified()));
+
+                //create new entry in the backup folder
+                file.copyTo(backupFolder.child(System.currentTimeMillis() + ".bin"));
+
+                //delete older backups if they exceed the max backup count
+                while(previous.size >= maxBackups){
+                    previous.pop().delete();
+                }
+            }
         });
     }
 
@@ -258,12 +272,12 @@ public class Settings{
         return getDataDirectory().child("settings.bin");
     }
 
-    public Fi getBackupSettingsFile(){
-        return getDataDirectory().child("settings_backup.bin");
+    public Fi getBackupFolder(){
+        return getDataDirectory().child("settings_backups");
     }
 
-    public Fi getLatestBackupSettingsFile(){
-        return getDataDirectory().child("settings_backup_latest.bin");
+    public Fi getBackupSettingsFile(){
+        return getDataDirectory().child("settings_backup.bin");
     }
 
     /** Returns the directory where all settings and data is placed. */

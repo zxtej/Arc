@@ -88,6 +88,7 @@ public class SDL{
     SDL_BUTTON_X1 = 4,
     SDL_BUTTON_X2 = 5,
 
+    //fake constants, not part of SDL, just my wrapper
     SDL_EVENT_QUIT = 0,
     SDL_EVENT_WINDOW = 1,
     SDL_EVENT_MOUSE_MOTION = 2,
@@ -95,6 +96,7 @@ public class SDL{
     SDL_EVENT_MOUSE_WHEEL = 4,
     SDL_EVENT_KEYBOARD = 5,
     SDL_EVENT_TEXT_INPUT = 6,
+    SDL_EVENT_TEXT_EDIT = 8,
     SDL_EVENT_OTHER = 7,
 
     SDL_GL_RED_SIZE = 0,
@@ -125,7 +127,7 @@ public class SDL{
                     try{
                         String name = "libSDL2.so";
                         File result = new File(extractedFile.getParentFile() == null ? name : (extractedFile.getParentFile() + "/" + name));
-                        extractFile(name, sourceCrc, result);
+                        extractFile(name, crc(readFile(name)), result);
                         System.load(result.getAbsolutePath());
                     }catch(Throwable ignored){
                     }
@@ -304,6 +306,19 @@ public class SDL{
         SDL_StopTextInput();
     */
 
+    public static native void SDL_SetTextInputRect(int x, int y, int w, int h); /*
+        SDL_Rect rect;
+        rect.x = x;
+        rect.y = y;
+        rect.w = w;
+        rect.h = h;
+        SDL_SetTextInputRect(&rect);
+    */
+
+    private static native boolean SDL_IsTextInputActive(); /*
+        return (jboolean)SDL_IsTextInputActive();
+    */
+
     /** Since passing in or returning a class here would be a pain, I have to resort to an int array.
      * @return whether the event was processed.
      * If true is returned, the input data array is filled with the event data.*/
@@ -356,6 +371,18 @@ public class SDL{
                             break;
                         }
                     }
+                    break;
+                case SDL_TEXTEDITING:
+                    data[0] = 8;
+                    data[1] = e.edit.start;
+                    data[2] = e.edit.length;
+                    for(int i = 0; i < 32; i ++){
+                        data[i + 3] = e.edit.text[i];
+                        if(e.edit.text[i] == '\0'){
+                            break;
+                        }
+                    }
+
                     break;
                 default:
                     data[0] = 7;

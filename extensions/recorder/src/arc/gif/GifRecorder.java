@@ -7,9 +7,9 @@ import arc.graphics.g2d.*;
 import arc.input.*;
 import arc.math.*;
 import arc.math.geom.*;
+import arc.scene.ui.Label.*;
 import arc.struct.*;
 import arc.util.*;
-import arc.util.async.*;
 
 import java.io.*;
 import java.text.*;
@@ -23,10 +23,15 @@ public class GifRecorder{
         resizeKey = KeyCode.controlLeft,
         openKey = KeyCode.e,
         recordKey = KeyCode.t,
-        shiftKey = KeyCode.shiftLeft;
+        shiftKey = KeyCode.shiftLeft,
+        switchModeKey = KeyCode.f12,
+        speedMinusKey = KeyCode.minus,
+        speedPlusKeep = KeyCode.plus;
 
+    public boolean outputMp4 = false;
     public Fi exportDirectory = Core.files == null ? Fi.get("gifs") : Core.files.local("gifs");
     public float speedMultiplier = 1f;
+    public float[] speedModes = {0.1f, 0.25f, 0.5f, 1f, 2f, 4f, 8f};
     public int recordfps = 30;
     public float driftSpeed = 1f;
     public Rect bounds = new Rect(-defaultSize / 2, -defaultSize / 2, defaultSize, defaultSize);
@@ -42,7 +47,7 @@ public class GifRecorder{
 
         //save each frame when recording
         if(recording){
-            frametime += Core.graphics.getDeltaTime() * 60.5f * speedMultiplier;
+            frametime += Core.graphics.getDeltaTime() * 60.5f / speedMultiplier;
             if(frametime >= (60f / recordfps)){
                 frames.add(ScreenUtils.getFrameBufferPixels(
                     (int)(bounds.x + offsetx + wx),
@@ -61,6 +66,26 @@ public class GifRecorder{
                     frames.clear();
                 }
                 open = !open;
+            }
+
+            int change = 0;
+            if(Core.input.keyTap(speedMinusKey)) change --;
+            if(Core.input.keyTap(speedPlusKeep)) change ++;
+
+            if(change != 0){
+                int idx = 3;
+                for(int i = 0; i < speedModes.length; i++){
+                    if(speedModes[i] == speedMultiplier){
+                        idx = i;
+                        break;
+                    }
+                }
+
+                speedMultiplier = speedModes[Mathf.clamp(idx + change, 0, speedModes.length - 1)];
+            }
+
+            if(Core.input.keyTap(switchModeKey) && !saving){
+                outputMp4 = !outputMp4;
             }
 
             if(open){
@@ -95,8 +120,10 @@ public class GifRecorder{
 
                                 //linux-only
                                 String args = Strings.format(
-                                "/usr/bin/ffmpeg -r @ -s @x@ -f rawvideo -pix_fmt rgba -i - -frames:v @ -filter:v vflip,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse @/@.gif",
-                                recordfps, (int)bounds.width, (int)bounds.height, frames.size, exportDirectory.absolutePath(), new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss", Locale.getDefault()).format(new Date())
+                                "/usr/bin/ffmpeg -r @ -s @x@ -f rawvideo -pix_fmt rgba -i - -frames:v @ -filter:v vflip@ @/@.@",
+                                recordfps, (int)bounds.width, (int)bounds.height, frames.size, outputMp4 ? "" : ",split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
+                                exportDirectory.absolutePath(), new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss", Locale.getDefault()).format(new Date()),
+                                outputMp4 ? "mp4" : "gif"
                                 );
 
                                 ProcessBuilder builder = new ProcessBuilder(args.split(" ")).redirectErrorStream(true);
@@ -111,11 +138,11 @@ public class GifRecorder{
 
                                 out.close();
                                 process.waitFor();
-                                frames.clear();
                             }catch(Exception e){
-                                e.printStackTrace();
+                                Log.err(e);
                             }
 
+                            frames.clear();
                             saving = false;
                         });
                     }
@@ -135,7 +162,7 @@ public class GifRecorder{
             Color.yellow
             );
 
-            Lines.stroke(1f);
+            Lines.stroke(2f);
             Lines.rect(bounds.x + wx + offsetx, bounds.y + wy + offsety, bounds.width, bounds.height);
 
             if(saving){
@@ -144,6 +171,31 @@ public class GifRecorder{
                 Fill.crect(wx - w / 2, wy - h / 2, w, h);
                 Draw.color(Color.red, Color.green, saveprogress);
                 Fill.crect(wx - w / 2, wy - h / 2, w * saveprogress, h);
+            }
+
+            //attempt fetching font from several sources
+            Font font = null;
+
+            if(Core.assets != null && Core.assets.contains("outline", Font.class)){
+                font = Core.assets.get("outline", Font.class);
+            }
+
+            if(font == null && Core.scene != null && Core.scene.hasStyle(LabelStyle.class)){
+                font = Core.scene.getStyle(LabelStyle.class).font;
+            }
+
+            if(font != null){
+                float scl = font.getData().scaleX;
+
+                font.getData().setScale(1f);
+                font.draw(
+                    (int)bounds.width + "x" + (int)bounds.height + " " +
+                    (saving ? "[sky][[saving " + (int)(saveprogress * 100) + "%]" : recording ? "[scarlet][[recording]" : outputMp4 ? "[coral]mp4" : "[royal]gif") +
+                    (!recording && !saving ? " [gray][[" + switchModeKey + "]" : "") +
+                    (speedMultiplier == 1f ? "" : "\n[white]speed: [royal]" + Strings.autoFixed(speedMultiplier, 2) + "[gray]x"),
+                    bounds.x + wx + offsetx + bounds.width/2f, bounds.y + wy + offsety - 4, Align.center
+                );
+                font.getData().setScale(scl);
             }
 
             Draw.color();
