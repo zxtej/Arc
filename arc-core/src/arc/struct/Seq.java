@@ -310,6 +310,21 @@ public class Seq<T> implements Iterable<T>, Eachable<T>{
         return result;
     }
 
+    public T max(Boolf<T> filter, Floatf<T> func){
+        T result = null;
+        float max = Float.NEGATIVE_INFINITY;
+        for(int i = 0; i < size; i++){
+            T t = items[i];
+            if(!filter.get(t)) continue;
+            float val = func.get(t);
+            if(val >= max){
+                result = t;
+                max = val;
+            }
+        }
+        return result;
+    }
+
     public T max(Floatf<T> func){
         T result = null;
         float max = Float.NEGATIVE_INFINITY;
