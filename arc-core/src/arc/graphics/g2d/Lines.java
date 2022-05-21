@@ -288,7 +288,7 @@ public class Lines{
     public static void dashCircle(float x, float y, float radius){
         float scaleFactor = 0.6f;
         int sides = 10 + (int)(radius * scaleFactor);
-        if(sides % 2 == 1) sides++;
+        sides += sides & 1; // Increment sides if odd
 
         vector.set(0, 0);
 
