@@ -47,6 +47,22 @@ public class SortedSpriteBatch extends SpriteBatch{
                 req.texture = texture;
                 req.blending = blending;
                 req.run = null;
+                if(fs) {
+                    // java 9+ has a faster StackWalker class.
+                    StackTraceElement[] st = Thread.currentThread().getStackTrace();
+                    StackTraceElement curr = null;
+                    for (int j = 0; j < st.length; j++) {
+                        String p = st[j].getClassName();
+                        if (p.startsWith("arc") || p.startsWith("java") || p.contains(".graphics.")) {
+                            continue;
+                        }
+                        curr = st[j];
+                        break;
+                    }
+                    if (curr != null) {
+                        req.from = Strings.format("@::@ (@:@)", curr.getClassName(), curr.getMethodName(), curr.getFileName(), curr.getLineNumber());
+                    } else req.from = "";
+                } else req.from = "";
                 requests.add(req);
             }
         }else{
