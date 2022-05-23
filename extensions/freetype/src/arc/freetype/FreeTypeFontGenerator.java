@@ -338,6 +338,7 @@ public class FreeTypeFontGenerator implements Disposable{
         int flags = getLoadingFlags(parameter);
 
         setPixelSizes(0, parameter.size);
+        data.scaleFactor = parameter.scaleFactor;
 
         // set general font data
         SizeMetrics fontMetrics = face.getSize().getMetrics();
@@ -517,6 +518,7 @@ public class FreeTypeFontGenerator implements Disposable{
         }
         if(spaceGlyph.width == 0) spaceGlyph.width = (int)(spaceGlyph.xadvance + data.padRight);
 
+        data.setScale(data.scaleX, data.scaleY);
         return data;
     }
 
@@ -758,6 +760,8 @@ public class FreeTypeFontGenerator implements Disposable{
     public static class FreeTypeFontParameter{
         /** The size in pixels */
         public int size = 16;
+        /** How much bigger to actually display the font at*/
+        public float scaleFactor = 1;
         /** If true, font smoothing is disabled. */
         public boolean mono;
         /** Strength of hinting */

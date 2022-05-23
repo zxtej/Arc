@@ -514,6 +514,7 @@ public class Font implements Disposable{
          */
         public float blankLineScale = 1;
         public float scaleX = 1, scaleY = 1;
+        public float scaleFactor = 1;
         public boolean markupEnabled;
         public boolean retainMarkup = false; // Whether or not to keep the physical placement of markup tags instead of not showing them
         /**
@@ -943,6 +944,8 @@ public class Font implements Disposable{
         public void setScale(float scaleX, float scaleY){
             if(scaleX == 0) throw new IllegalArgumentException("scaleX cannot be 0.");
             if(scaleY == 0) throw new IllegalArgumentException("scaleY cannot be 0.");
+            scaleX *= scaleFactor;
+            scaleY *= scaleFactor;
             float x = scaleX / this.scaleX;
             float y = scaleY / this.scaleY;
             lineHeight *= y;
@@ -975,7 +978,7 @@ public class Font implements Disposable{
          * @see #setScale(float, float)
          */
         public void scale(float amount){
-            setScale(scaleX + amount, scaleY + amount);
+            setScale(scaleX / scaleFactor + amount, scaleY / scaleFactor + amount);
         }
     }
 }
