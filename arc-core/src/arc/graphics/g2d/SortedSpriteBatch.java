@@ -12,7 +12,6 @@ import java.util.concurrent.*;
 public class SortedSpriteBatch extends SpriteBatch{
     protected Seq<DrawRequest> requestPool = new Seq<>(10000);
     protected Seq<DrawRequest> requests = new Seq<>(DrawRequest.class);
-    protected Seq<Point3> pointPool = new Seq<>(1000);
     protected boolean sort;
     protected boolean flushing;
 
@@ -114,10 +113,6 @@ public class SortedSpriteBatch extends SpriteBatch{
         return requestPool.size > 0 ? requestPool.pop() : new DrawRequest();
     }
 
-    protected Point3 obtainPoint(){
-        return pointPool.size > 0 ? pointPool.pop() : new Point3();
-    }
-
     @Override
     protected void flush(){
         flushRequests();
@@ -162,11 +157,13 @@ public class SortedSpriteBatch extends SpriteBatch{
     }
 
     public static boolean debug = false, dump = false, fs = false, zs = false, mt = true;
-    Seq<Point3> contiguous = new Seq<>(Point3.class);
+    Point3[] contiguous = new Point3[10000];
+    { for(int i = 0; i < contiguous.length; i++) contiguous[i] = new Point3(); }
     ObjectIntMap<String> map = new ObjectIntMap<>();
     ForkJoinPool commonPool = ForkJoinPool.commonPool();
-    Seq<DrawRequest> copy = new Seq<>(DrawRequest.class);
-    int[] locs = new int[contiguous.items.length];
+    DrawRequest[] copy = new DrawRequest[0];
+    int[] locs = new int[contiguous.length];
+
 
     protected void sortRequests(){
         if (mt) {
@@ -179,43 +176,51 @@ public class SortedSpriteBatch extends SpriteBatch{
     protected void sortRequestsMT(){
         Time.mark(); Time.mark();
         final int numRequests = requests.size;
-        copy.size = 0;
-        copy.ensureCapacity(numRequests);
-        DrawRequest[] items = copy.items;
+        if(copy.length < numRequests) copy = new DrawRequest[numRequests + (numRequests >> 3)];
+        final DrawRequest[] items = copy;
         System.arraycopy(requests.items, 0, items, 0, numRequests);
 
         float t_init = Time.elapsed(); Time.mark();
 
+        Point3[] contiguous = this.contiguous;
+        int ci = 0, cl = contiguous.length;
         float z = items[0].z;
         int startI = 0;
         // Point3: <z, index, length>
         for(int i = 1; i < numRequests; i++){
             if(items[i].z != z){ // if contiguous section should end
-                contiguous.add(obtainPoint().set(Float.floatToRawIntBits(z + 16f), startI, i - startI));
+                contiguous[ci++].set(Float.floatToRawIntBits(z + 16f), startI, i - startI);
+                if(ci >= cl){
+                    cl <<= 1;
+                    Point3[] contiguous2 = new Point3[cl];
+                    System.arraycopy(contiguous, 0, contiguous2, 0, ci);
+                    for(int j = ci; j < cl; j++) contiguous2[j] = new Point3();
+                    contiguous = contiguous2;
+                }
                 z = items[i].z;
                 startI = i;
             }
         }
-        contiguous.add(obtainPoint().set(Float.floatToRawIntBits(z + 16f), startI, numRequests - startI));
-
-        final int L = contiguous.size;
+        contiguous[ci++].set(Float.floatToRawIntBits(z + 16f), startI, numRequests - startI);
         float t_cont = Time.elapsed(); Time.mark();
 
-        Arrays.parallelSort(contiguous.items, 0, L, Structs.comparingInt(p -> p.x));
+        final int L = ci;
+
+        Arrays.parallelSort(contiguous, 0, L, Structs.comparingInt(p -> p.x));
         float t_sort = Time.elapsed(); Time.mark();
 
         if(locs.length < L) locs = new int[L + L / 10];
+        int[] locs = this.locs;
         for(int i = 0; i < L - 1; i++){
-            locs[i + 1] = locs[i] + contiguous.items[i].z;
+            locs[i + 1] = locs[i] + contiguous[i].z;
         }
-        PopulateTask.tasks = contiguous.items;
+        PopulateTask.tasks = contiguous;
         PopulateTask.src = items;
         PopulateTask.dest = requests.items;
         PopulateTask.locs = locs;
         commonPool.invoke(new PopulateTask(0, L));
         float t_cpy = Time.elapsed(); Time.mark();
-        pointPool.addAll(contiguous);
-        contiguous.clear();
+        this.contiguous = contiguous;
         float t_reset = Time.elapsed();
         float elapsed = Time.elapsed();
         if(debug) {
@@ -227,38 +232,45 @@ public class SortedSpriteBatch extends SpriteBatch{
     protected void sortRequestsST(){ // Non-threaded implementation for weak devices
         Time.mark(); Time.mark();
         final int numRequests = requests.size;
-        int extraCapacity = numRequests - copy.size;
-        if(extraCapacity > 0) copy.ensureCapacity(extraCapacity);
-        DrawRequest[] items = copy.items;
+        if(copy.length < numRequests) copy = new DrawRequest[numRequests + (numRequests >> 3)];
+        final DrawRequest[] items = copy;
         System.arraycopy(requests.items, 0, items, 0, numRequests);
         float t_init = Time.elapsed(); Time.mark();
+        Point3[] contiguous = this.contiguous;
+        int ci = 0, cl = contiguous.length;
         float z = items[0].z;
         int startI = 0;
         // Point3: <z, index, length>
         for(int i = 1; i < numRequests; i++){
             if(items[i].z != z){ // if contiguous section should end
-                contiguous.add(obtainPoint().set(Float.floatToRawIntBits(z + 16f), startI, i - startI));
+                contiguous[ci++].set(Float.floatToRawIntBits(z + 16f), startI, i - startI);
+                if(ci >= cl){
+                    cl <<= 1;
+                    Point3[] contiguous2 = new Point3[cl];
+                    System.arraycopy(contiguous, 0, contiguous2, 0, ci);
+                    for(int j = ci; j < cl; j++) contiguous2[j] = new Point3();
+                    contiguous = contiguous2;
+                }
                 z = items[i].z;
                 startI = i;
             }
         }
-        contiguous.add(obtainPoint().set(Float.floatToRawIntBits(z + 16f), startI, numRequests - startI));
+        contiguous[ci++].set(Float.floatToRawIntBits(z + 16f), startI, numRequests - startI);
         float t_cont = Time.elapsed(); Time.mark();
 
-        final int L = contiguous.size;
+        final int L = ci;
 
-        Arrays.sort(contiguous.items, 0, L, Structs.comparingInt(p -> p.x));
+        Arrays.sort(contiguous, 0, L, Structs.comparingInt(p -> p.x));
         float t_sort = Time.elapsed(); Time.mark();
 
         int ptr = 0;
         for(int i = 0; i < L; i++){
-            Point3 point = contiguous.items[i];
+            Point3 point = contiguous[i];
             System.arraycopy(items, point.y, requests.items, ptr, point.z);
             ptr += point.z;
         }
         float t_cpy = Time.elapsed(); Time.mark();
-        pointPool.addAll(contiguous);
-        contiguous.clear();
+        this.contiguous = contiguous;
         float t_reset = Time.elapsed();
         float elapsed = Time.elapsed();
         if(debug) {
