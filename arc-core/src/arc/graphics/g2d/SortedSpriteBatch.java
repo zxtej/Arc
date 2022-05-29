@@ -156,14 +156,14 @@ public class SortedSpriteBatch extends SpriteBatch{
         }
     }
 
-    public static boolean debug = false, dump = false, fs = false, zs = false, mt = true;
-    Point3[] contiguous = new Point3[10000];
+    public static boolean debug = false, dump = false, fs = false, zs = false, mt = true, radix = false;
+    Point3[] contiguous = new Point3[2048], contiguousCopy = new Point3[2048];
     { for(int i = 0; i < contiguous.length; i++) contiguous[i] = new Point3(); }
     ObjectIntMap<String> map = new ObjectIntMap<>();
     ForkJoinPool commonPool = ForkJoinPool.commonPool();
     DrawRequest[] copy = new DrawRequest[0];
     int[] locs = new int[contiguous.length];
-
+    int[] keys = new int[radix_length];
 
     protected void sortRequests(){
         if (mt) {
@@ -173,6 +173,60 @@ public class SortedSpriteBatch extends SpriteBatch{
         }
     }
 
+    private final static int bits = 10, radix_length = 1 << bits, mask = radix_length - 1, runs = (Integer.SIZE - 2 + bits - 1) / bits;
+    protected Point3[] radixSort(Point3[] arr, final int end){
+        Point3[] contiguousCopy = this.contiguousCopy;
+        int[] keys = this.keys;
+        for(int d = 0; d < runs; d++){
+            keys[0] = keys[1] = keys[2] = keys[3] = 0;
+            for(int idx = 4; idx < radix_length; idx <<= 1){
+                System.arraycopy(keys, 0, keys, idx, idx);
+            }
+            for(int i = 0; i < end; i++){
+                keys[arr[i].x & mask]++;
+            }
+            for(int i = 1; i < radix_length; i++){
+                keys[i] += keys[i - 1];
+            }
+            for(int i = end - 1; i >= 0; i--){
+                Point3 curr = arr[i];
+                contiguousCopy[--keys[curr.x & mask]] = curr;
+                curr.x >>= bits;
+            }
+            Point3[] temp = arr;
+            arr = contiguousCopy;
+            contiguousCopy = temp;
+        }
+        return arr;
+    }
+
+    protected Point3[] countingSort(Point3[] arr, final int end){
+        int unique = 0;
+        int[] locs = this.locs, keys = this.keys;
+        for(int i = 0; i < end; i++){
+            int num = arr[i].x;
+            int loc = Arrays.binarySearch(keys, 0, unique, num);
+            if(loc < 0){
+                loc = -loc - 1;
+                System.arraycopy(keys, loc, keys, loc + 1, unique - loc);
+                System.arraycopy(locs, loc, locs, loc + 1, unique - loc);
+                unique++;
+                keys[loc] = num; // TODO: ensure keys has enough capacity
+                locs[loc] = 1;
+            } else {
+                locs[loc]++;
+            }
+        }
+        for(int i = 1; i < unique; i++){
+            locs[i] += locs[i - 1];
+        }
+        Point3[] arrCopy = this.contiguousCopy;
+        for(int i = end - 1; i >= 0; i--){
+            Point3 curr = arr[i];
+            arrCopy[--locs[Arrays.binarySearch(keys, 0, unique, curr.x)]] = curr;
+        }
+        return arrCopy;
+    }
     protected void sortRequestsMT(){
         Time.mark(); Time.mark();
         final int numRequests = requests.size;
@@ -205,12 +259,20 @@ public class SortedSpriteBatch extends SpriteBatch{
         float t_cont = Time.elapsed(); Time.mark();
 
         final int L = ci;
+        if(locs.length < L) locs = new int[L + L / 10];
 
-        Arrays.parallelSort(contiguous, 0, L, Structs.comparingInt(p -> p.x));
+        this.contiguous = contiguous;
+        if(contiguousCopy.length < contiguous.length){
+            this.contiguousCopy = new Point3[contiguous.length];
+        }
+
+        //Arrays.parallelSort(contiguous, 0, L, Structs.comparingInt(p -> p.x));
+        contiguous = radix ? radixSort(contiguous, L) : countingSort(contiguous, L);
+
         float t_sort = Time.elapsed(); Time.mark();
 
-        if(locs.length < L) locs = new int[L + L / 10];
         int[] locs = this.locs;
+        locs[0] = 0;
         for(int i = 0; i < L - 1; i++){
             locs[i + 1] = locs[i] + contiguous[i].z;
         }
@@ -219,13 +281,11 @@ public class SortedSpriteBatch extends SpriteBatch{
         PopulateTask.dest = requests.items;
         PopulateTask.locs = locs;
         commonPool.invoke(new PopulateTask(0, L));
-        float t_cpy = Time.elapsed(); Time.mark();
-        this.contiguous = contiguous;
-        float t_reset = Time.elapsed();
+        float t_cpy = Time.elapsed();
         float elapsed = Time.elapsed();
         if(debug) {
-            Log.debug("total: @ | size: @ -> @ | init: @ | contiguous: @ | sort: @ | populate: @ | reset: @",
-                    elapsed, numRequests, L, t_init, t_cont, t_sort, t_cpy, t_reset);
+            Log.debug("total: @ | size: @ -> @ | init: @ | contiguous: @ | sort: @ | populate: @ | reset: -",
+                    elapsed, numRequests, L, t_init, t_cont, t_sort, t_cpy);
             debugInfo();
         }
     }
@@ -260,7 +320,12 @@ public class SortedSpriteBatch extends SpriteBatch{
 
         final int L = ci;
 
-        Arrays.sort(contiguous, 0, L, Structs.comparingInt(p -> p.x));
+        this.contiguous = contiguous;
+        if(contiguousCopy.length < contiguous.length){
+            contiguousCopy = new Point3[contiguous.length];
+        }
+        contiguous = radix ? radixSort(contiguous, L) : countingSort(contiguous, L);
+        //Arrays.sort(contiguous, 0, L, Structs.comparingInt(p -> p.x));
         float t_sort = Time.elapsed(); Time.mark();
 
         int ptr = 0;
@@ -269,13 +334,11 @@ public class SortedSpriteBatch extends SpriteBatch{
             System.arraycopy(items, point.y, requests.items, ptr, point.z);
             ptr += point.z;
         }
-        float t_cpy = Time.elapsed(); Time.mark();
-        this.contiguous = contiguous;
-        float t_reset = Time.elapsed();
+        float t_cpy = Time.elapsed();
         float elapsed = Time.elapsed();
         if(debug) {
-            Log.debug("total: @ | size: @ -> @ | init: @ | contiguous: @ | sort: @ | populate: @ | reset: @",
-                    elapsed, numRequests, L, t_init, t_cont, t_sort, t_cpy, t_reset);
+            Log.debug("total: @ | size: @ -> @ | init: @ | contiguous: @ | sort: @ | populate: @ | reset: -",
+                    elapsed, numRequests, L, t_init, t_cont, t_sort, t_cpy);
             debugInfo();
         }
     }
