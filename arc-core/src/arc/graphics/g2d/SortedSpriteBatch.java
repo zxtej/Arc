@@ -278,9 +278,16 @@ public class SortedSpriteBatch extends SpriteBatch{
         float t_sort = Time.elapsed(); Time.mark();
 
         int ptr = 0;
+        DrawRequest[] dest = requests.items;
         for(int i = 0; i < L; i++){
             Point3 point = contiguous[i];
-            System.arraycopy(items, point.y, requests.items, ptr, point.z);
+            final int length = point.z;
+            if(length < 10){
+                final int end = point.y + length;
+                for(int sj = point.y, dj = locs[i]; sj < end ; sj++, dj++){
+                    requests.items[dj] = items[sj];
+                }
+            } else System.arraycopy(items, point.y, dest, ptr, length);
             ptr += point.z;
         }
         float t_cpy = Time.elapsed();
@@ -353,15 +360,10 @@ public class SortedSpriteBatch extends SpriteBatch{
                 if(loc < 0){
                     loc = -loc - 1;
                     if(unique >= keyLength){
-                        final int oldLength = keyLength;
                         CountingSort.keyLength = keyLength = keyLength * 3 / 2;
-                        int[] temp;
-                        System.arraycopy(keys, 0, temp = new int[keyLength], 0, oldLength);
-                        CountingSort.keys = keys = temp;
-                        System.arraycopy(locs, 0, temp = new int[keyLength], 0, oldLength);
-                        CountingSort.locs = locs = temp;
-                        System.arraycopy(sortedToInsertion, 0, temp = new int[keyLength], 0, oldLength);
-                        CountingSort.sortedToInsertion = sortedToInsertion = temp;
+                        CountingSort.keys = keys = Arrays.copyOf(keys, keyLength);
+                        CountingSort.locs = locs = Arrays.copyOf(locs, keyLength);
+                        CountingSort.sortedToInsertion = sortedToInsertion = Arrays.copyOf(sortedToInsertion, keyLength);
                     }
                     System.arraycopy(keys, loc, keys, loc + 1, unique - loc);
                     System.arraycopy(sortedToInsertion, loc, sortedToInsertion, loc + 1, unique - loc);
@@ -438,7 +440,7 @@ public class SortedSpriteBatch extends SpriteBatch{
          */
         protected void compute(){
             int[] locs = PopulateTask.locs;
-            if(to - from > 1 && locs[to] - locs[from] > 4096){
+            if(to - from > 1 && locs[to] - locs[from] > 2048){
                 int half = (locs[to] + locs[from]) >> 1;
                 int mid = Arrays.binarySearch(locs, from, to, half);
                 if(mid < 0) mid = -mid - 1;
@@ -447,9 +449,16 @@ public class SortedSpriteBatch extends SpriteBatch{
                     return;
                 }
             }
+            DrawRequest[] src = PopulateTask.src, dest = PopulateTask.dest;
             for(int i = from; i < to; i++){
                 Point3 point = tasks[i];
-                System.arraycopy(src, point.y, dest, locs[i], point.z);
+                final int length = point.z;
+                if(length < 10){
+                    final int end = point.y + length;
+                    for(int sj = point.y, dj = locs[i]; sj < end ; sj++, dj++){
+                        dest[dj] = src[sj];
+                    }
+                } else System.arraycopy(src, point.y, dest, locs[i], length);
             }
         }
     }
