@@ -164,8 +164,7 @@ public class SortedSpriteBatch extends SpriteBatch{
     public static boolean debug = false, dump = false, fs = false, zs = false, mt = true, radix = false;
     Point3[] contiguous = new Point3[2048], contiguousCopy = new Point3[2048];
     { for(int i = 0; i < contiguous.length; i++) contiguous[i] = new Point3(); }
-    ObjectIntMap<String> map = new ObjectIntMap<>();
-    ForkJoinPool commonPool = ForkJoinPool.commonPool();
+    final ForkJoinPool commonPool = ForkJoinPool.commonPool();
     DrawRequest[] copy = new DrawRequest[0];
     int[] locs = new int[contiguous.length];
 
@@ -183,7 +182,7 @@ public class SortedSpriteBatch extends SpriteBatch{
         if(copy.length < numRequests) copy = new DrawRequest[numRequests + (numRequests >> 3)];
         final DrawRequest[] items = requests.items, itemCopy = copy;
         final float[] itemZ = requestZ.items;
-        Future<?> initTask = commonPool.submit(() -> System.arraycopy(items, 0, itemCopy, 0, numRequests));
+        final Future<?> initTask = commonPool.submit(() -> System.arraycopy(items, 0, itemCopy, 0, numRequests));
 
         float t_init = Time.elapsed(); Time.mark();
 
@@ -196,42 +195,36 @@ public class SortedSpriteBatch extends SpriteBatch{
             if(itemZ[i] != z){ // if contiguous section should end
                 contiguous[ci++].set(Float.floatToRawIntBits(z + 16f), startI, i - startI);
                 if(ci >= cl){
-                    cl <<= 1;
-                    Point3[] contiguous2 = new Point3[cl];
-                    System.arraycopy(contiguous, 0, contiguous2, 0, ci);
-                    for(int j = ci; j < cl; j++) contiguous2[j] = new Point3();
-                    contiguous = contiguous2;
+                    contiguous = Arrays.copyOf(contiguous, cl <<= 1);
+                    for(int j = ci; j < cl; j++) contiguous[j] = new Point3();
                 }
                 z = itemZ[i];
                 startI = i;
             }
         }
         contiguous[ci++].set(Float.floatToRawIntBits(z + 16f), startI, numRequests - startI);
+        this.contiguous = contiguous;
         float t_cont = Time.elapsed(); Time.mark();
 
         final int L = ci;
 
-        this.contiguous = contiguous;
-        if(contiguousCopy.length < contiguous.length){
-            this.contiguousCopy = new Point3[contiguous.length];
-        }
+        if(contiguousCopy.length < contiguous.length) this.contiguousCopy = new Point3[contiguous.length];
 
-        //Arrays.parallelSort(contiguous, 0, L, Structs.comparingInt(p -> p.x));
-        contiguous = radix ? RadixSort.radixSortST(contiguous, contiguousCopy, L) : CountingSort.countingSortST(contiguous, contiguousCopy, L);
+        final Point3[] sorted = radix ? RadixSort.radixSortST(contiguous, contiguousCopy, L) : CountingSort.countingSortST(contiguous, contiguousCopy, L);
 
         float t_sort = Time.elapsed(); Time.mark();
 
         if(locs.length < L + 1) locs = new int[L + L / 10];
-        int[] locs = this.locs;
+        final int[] locs = this.locs;
         for(int i = 0; i < L; i++){
-            locs[i + 1] = locs[i] + contiguous[i].z;
+            locs[i + 1] = locs[i] + sorted[i].z;
         }
         try {
             initTask.get();
         } catch (Exception ignored){
             System.arraycopy(items, 0, itemCopy, 0, numRequests);
         }
-        PopulateTask.tasks = contiguous;
+        PopulateTask.tasks = sorted;
         PopulateTask.src = itemCopy;
         PopulateTask.dest = items;
         PopulateTask.locs = locs;
@@ -261,33 +254,30 @@ public class SortedSpriteBatch extends SpriteBatch{
             if(itemZ[i] != z){ // if contiguous section should end
                 contiguous[ci++].set(Float.floatToRawIntBits(z + 16f), startI, i - startI);
                 if(ci >= cl){
-                    cl <<= 1;
-                    Point3[] contiguous2 = new Point3[cl];
-                    System.arraycopy(contiguous, 0, contiguous2, 0, ci);
-                    for(int j = ci; j < cl; j++) contiguous2[j] = new Point3();
-                    contiguous = contiguous2;
+                    contiguous = Arrays.copyOf(contiguous, cl <<= 1);
+                    for(int j = ci; j < cl; j++) contiguous[j] = new Point3();
                 }
                 z = itemZ[i];
                 startI = i;
             }
         }
         contiguous[ci++].set(Float.floatToRawIntBits(z + 16f), startI, numRequests - startI);
+        this.contiguous = contiguous;
         float t_cont = Time.elapsed(); Time.mark();
 
         final int L = ci;
 
-        this.contiguous = contiguous;
-        if(contiguousCopy.length < contiguous.length){
-            contiguousCopy = new Point3[contiguous.length];
-        }
-        contiguous = radix ? RadixSort.radixSortST(contiguous, contiguousCopy, L) : CountingSort.countingSortST(contiguous, contiguousCopy, L);
+        if(contiguousCopy.length < contiguous.length) contiguousCopy = new Point3[contiguous.length];
+
+        final Point3[] sorted = radix ? RadixSort.radixSortST(contiguous, contiguousCopy, L) : CountingSort.countingSortST(contiguous, contiguousCopy, L);
         //Arrays.sort(contiguous, 0, L, Structs.comparingInt(p -> p.x));
+
         float t_sort = Time.elapsed(); Time.mark();
 
         int ptr = 0;
-        DrawRequest[] dest = requests.items;
+        final DrawRequest[] dest = requests.items;
         for(int i = 0; i < L; i++){
-            Point3 point = contiguous[i];
+            final Point3 point = sorted[i];
             final int length = point.z;
             if(length < 10){
                 final int end = point.y + length;
@@ -325,6 +315,7 @@ public class SortedSpriteBatch extends SpriteBatch{
                 out.delete(out.length() - 2, out.length());
             }
             if (fs) {
+                ObjectIntMap<String> map = new ObjectIntMap<>();
                 if (zs) out.append("\n");
                 for (DrawRequest dr : requests) {
                     map.put(dr.from, map.get(dr.from, 0) + 1);
@@ -351,7 +342,7 @@ public class SortedSpriteBatch extends SpriteBatch{
     static class CountingSort{
         private static int keyLength = 100; // The maximum number of unique values to sort
         private static int[] keys = new int[keyLength], locs = new int[keyLength], sortedToInsertion = new int[keyLength];
-        public static Point3[] countingSortST(Point3[] arr, Point3[] swap, final int end){
+        public static Point3[] countingSortST(final Point3[] arr, final Point3[] swap, final int end){
             int unique = 0, keyLength = CountingSort.keyLength;
             int[] locs = CountingSort.locs, keys = CountingSort.keys, sortedToInsertion = CountingSort.sortedToInsertion;
             for(int i = 0; i < end; i++){
@@ -374,12 +365,13 @@ public class SortedSpriteBatch extends SpriteBatch{
                     locs[arr[i].x = sortedToInsertion[loc]]++;
                 }
             }
+            final int[] locs2 = locs, sortedToInsertion2 = sortedToInsertion;
             for(int i = 1; i < unique; i++){
-                locs[sortedToInsertion[i]] += locs[sortedToInsertion[i - 1]];
+                locs2[sortedToInsertion2[i]] += locs2[sortedToInsertion2[i - 1]];
             }
             for(int i = end - 1; i >= 0; i--){
                 Point3 curr = arr[i];
-                swap[--locs[curr.x]] = curr;
+                swap[--locs2[curr.x]] = curr;
             }
             return swap;
         }
@@ -389,23 +381,23 @@ public class SortedSpriteBatch extends SpriteBatch{
         private final static int[] radixBuckets = new int[radix_length], bucketsBlank = new int[radix_length];
         // For up to z = 256, we only need to radix the last 26 bits.
         public static Point3[] radixSortST(Point3[] arr, Point3[] swap, final int end){
-            int[] keys = RadixSort.radixBuckets;
+            final int[] keys = RadixSort.radixBuckets;
             for(int d = 0; d < runs; d++){
+                final Point3[] arr2 = arr, swap2 = swap;
                 System.arraycopy(bucketsBlank, 0, keys, 0, radix_length);
                 for(int i = 0; i < end; i++){
-                    keys[arr[i].x & mask]++;
+                    keys[arr2[i].x & mask]++;
                 }
                 for(int i = 1; i < radix_length; i++){
                     keys[i] += keys[i - 1];
                 }
                 for(int i = end - 1; i >= 0; i--){
-                    Point3 curr = arr[i];
-                    swap[--keys[curr.x & mask]] = curr;
+                    Point3 curr = arr2[i];
+                    swap2[--keys[curr.x & mask]] = curr;
                     curr.x >>= bits;
                 }
-                Point3[] temp = arr;
-                arr = swap;
-                swap = temp;
+                arr = swap2;
+                swap = arr2;
             }
             return arr;
         }
