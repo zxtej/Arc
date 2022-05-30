@@ -173,15 +173,14 @@ public class SortedSpriteBatch extends SpriteBatch{
         }
     }
 
-    private final static int bits = 10, radix_length = 1 << bits, mask = radix_length - 1, runs = (Integer.SIZE - 2 + bits - 1) / bits;
+    private final static int bits = 13, radix_length = 1 << bits, mask = radix_length - 1, runs = (26 + bits - 1) / bits;
+    // TODO: for up to z = 256, we only need to radix the last 26 bits. so take length of 9?
+    int[] keysBlank = new int[radix_length];
     protected Point3[] radixSort(Point3[] arr, final int end){
         Point3[] contiguousCopy = this.contiguousCopy;
         int[] keys = this.keys;
         for(int d = 0; d < runs; d++){
-            keys[0] = keys[1] = keys[2] = keys[3] = 0;
-            for(int idx = 4; idx < radix_length; idx <<= 1){
-                System.arraycopy(keys, 0, keys, idx, idx);
-            }
+            System.arraycopy(keysBlank, 0, keys, 0, radix_length);
             for(int i = 0; i < end; i++){
                 keys[arr[i].x & mask]++;
             }
@@ -201,6 +200,7 @@ public class SortedSpriteBatch extends SpriteBatch{
     }
 
     protected Point3[] countingSort(Point3[] arr, final int end){
+        int[] sortedToInsertion = new int[this.keys.length];
         int unique = 0;
         int[] locs = this.locs, keys = this.keys;
         for(int i = 0; i < end; i++){
@@ -209,21 +209,21 @@ public class SortedSpriteBatch extends SpriteBatch{
             if(loc < 0){
                 loc = -loc - 1;
                 System.arraycopy(keys, loc, keys, loc + 1, unique - loc);
-                System.arraycopy(locs, loc, locs, loc + 1, unique - loc);
-                unique++;
+                System.arraycopy(sortedToInsertion, loc, sortedToInsertion, loc + 1, unique - loc);
+                arr[i].x = sortedToInsertion[loc] = unique;
                 keys[loc] = num; // TODO: ensure keys has enough capacity
-                locs[loc] = 1;
+                locs[unique++] = 1;
             } else {
-                locs[loc]++;
+                locs[arr[i].x = sortedToInsertion[loc]]++;
             }
         }
         for(int i = 1; i < unique; i++){
-            locs[i] += locs[i - 1];
+            locs[sortedToInsertion[i]] += locs[sortedToInsertion[i - 1]];
         }
         Point3[] arrCopy = this.contiguousCopy;
         for(int i = end - 1; i >= 0; i--){
             Point3 curr = arr[i];
-            arrCopy[--locs[Arrays.binarySearch(keys, 0, unique, curr.x)]] = curr;
+            arrCopy[--locs[curr.x]] = curr;
         }
         return arrCopy;
     }
