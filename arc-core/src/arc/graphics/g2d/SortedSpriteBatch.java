@@ -300,14 +300,14 @@ public class SortedSpriteBatch extends SpriteBatch{
         float t_cpy = Time.elapsed();
         float elapsed = Time.elapsed();
         if(debug) {
-            Log.debug("total: @ | size: @ -> @ | init: @ | contiguous: @ | sort: @ | populate: @ | reset: -",
+            Log.debug("total: @ | size: @ -> @ | init: @ | contiguous: @ | sort: @ | populate: @",
                     elapsed, numRequests, L, t_init, t_cont, t_sort, t_cpy);
             debugInfo();
         }
     }
     public void debugInfo() {
         if (debug) {
-            StringBuilder out = new StringBuilder();
+            final StringBuilder out = new StringBuilder();
             if (zs) {
                 float prevZ = Float.MAX_VALUE;
                 int length = 0;
@@ -315,10 +315,7 @@ public class SortedSpriteBatch extends SpriteBatch{
                     float currZ = requests.items[i].z;
                     if (currZ != prevZ) {
                         if (prevZ != Float.MAX_VALUE) {
-                            out.append(prevZ);
-                            out.append(": ");
-                            out.append(length);
-                            out.append(", ");
+                            out.append(prevZ).append(": ").append(length).append(", ");
                         }
                         length = 0;
                         prevZ = currZ;
@@ -333,10 +330,7 @@ public class SortedSpriteBatch extends SpriteBatch{
                     map.put(dr.from, map.get(dr.from, 0) + 1);
                 }
                 map.entries().forEach(e -> {
-                    out.append(e.key);
-                    out.append(": ");
-                    out.append(e.value);
-                    out.append(", ");
+                    out.append(e.key).append(": ").append(e.value).append(", ");
                 });
                 out.delete(out.length() - 2, out.length());
                 map.clear();
@@ -348,8 +342,7 @@ public class SortedSpriteBatch extends SpriteBatch{
         if (debug && dump) {
             StringBuilder out = new StringBuilder("Result dump:\n");
             for (DrawRequest dr : requests) {
-                out.append(dr.z);
-                out.append(" ");
+                out.append(dr.z).append(" ");
             }
             Log.debug(out);
             debug = dump = false;
