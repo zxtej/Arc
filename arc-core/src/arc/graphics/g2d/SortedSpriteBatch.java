@@ -431,9 +431,9 @@ public class SortedSpriteBatch extends SpriteBatch{
         }
          */
         protected void compute(){
-            int[] locs = PopulateTask.locs;
+            final int[] locs = PopulateTask.locs;
             if(to - from > 1 && locs[to] - locs[from] > 2048){
-                int half = (locs[to] + locs[from]) >> 1;
+                final int half = (locs[to] + locs[from]) >> 1;
                 int mid = Arrays.binarySearch(locs, from, to, half);
                 if(mid < 0) mid = -mid - 1;
                 if(mid != from && mid != to) {
@@ -441,9 +441,10 @@ public class SortedSpriteBatch extends SpriteBatch{
                     return;
                 }
             }
-            DrawRequest[] src = PopulateTask.src, dest = PopulateTask.dest;
+            final DrawRequest[] src = PopulateTask.src, dest = PopulateTask.dest;
+            final Point3[] tasks = PopulateTask.tasks;
             for(int i = from; i < to; i++){
-                Point3 point = tasks[i];
+                final Point3 point = tasks[i];
                 final int length = point.z;
                 if(length < 10){
                     final int end = point.y + length;
