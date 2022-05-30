@@ -14,6 +14,7 @@ public class SortedSpriteBatch extends SpriteBatch{
     protected Seq<DrawRequest> requests = new Seq<>(DrawRequest.class);
     protected boolean sort;
     protected boolean flushing;
+    protected FloatSeq requestZ = new FloatSeq();
 
     @Override
     protected void setSort(boolean sort){
@@ -63,6 +64,7 @@ public class SortedSpriteBatch extends SpriteBatch{
                     } else req.from = "";
                 } else req.from = "";
                 requests.add(req);
+                requestZ.add(z);
             }
         }else{
             super.draw(texture, spriteVertices, offset, count);
@@ -88,6 +90,7 @@ public class SortedSpriteBatch extends SpriteBatch{
             req.texture = null;
             req.run = null;
             requests.add(req);
+            requestZ.add(z);
         }else{
             super.draw(region, x, y, originX, originY, width, height, rotation);
         }
@@ -104,6 +107,7 @@ public class SortedSpriteBatch extends SpriteBatch{
             req.z = z;
             req.texture = null;
             requests.add(req);
+            requestZ.add(z);
         }else{
             super.draw(request);
         }
@@ -151,6 +155,7 @@ public class SortedSpriteBatch extends SpriteBatch{
 
             requestPool.addAll(requests);
             requests.size = 0;
+            requestZ.size = 0;
 
             flushing = false;
         }
@@ -177,17 +182,18 @@ public class SortedSpriteBatch extends SpriteBatch{
         final int numRequests = requests.size;
         if(copy.length < numRequests) copy = new DrawRequest[numRequests + (numRequests >> 3)];
         final DrawRequest[] items = requests.items, itemCopy = copy;
+        final float[] itemZ = requestZ.items;
         Future<?> initTask = commonPool.submit(() -> System.arraycopy(items, 0, itemCopy, 0, numRequests));
 
         float t_init = Time.elapsed(); Time.mark();
 
         Point3[] contiguous = this.contiguous;
         int ci = 0, cl = contiguous.length;
-        float z = items[0].z;
+        float z = itemZ[0];
         int startI = 0;
         // Point3: <z, index, length>
         for(int i = 1; i < numRequests; i++){
-            if(items[i].z != z){ // if contiguous section should end
+            if(itemZ[i] != z){ // if contiguous section should end
                 contiguous[ci++].set(Float.floatToRawIntBits(z + 16f), startI, i - startI);
                 if(ci >= cl){
                     cl <<= 1;
@@ -196,7 +202,7 @@ public class SortedSpriteBatch extends SpriteBatch{
                     for(int j = ci; j < cl; j++) contiguous2[j] = new Point3();
                     contiguous = contiguous2;
                 }
-                z = items[i].z;
+                z = itemZ[i];
                 startI = i;
             }
         }
@@ -233,7 +239,7 @@ public class SortedSpriteBatch extends SpriteBatch{
         float t_cpy = Time.elapsed();
         float elapsed = Time.elapsed();
         if(debug) {
-            Log.debug("total: @ | size: @ -> @ | init: @ | contiguous: @ | sort: @ | populate: @ | reset: -",
+            Log.debug("total: @ | size: @ -> @ | init: @ | contiguous: @ | sort: @ | populate: @",
                     elapsed, numRequests, L, t_init, t_cont, t_sort, t_cpy);
             debugInfo();
         }
@@ -458,7 +464,7 @@ public class SortedSpriteBatch extends SpriteBatch{
                     for(int sj = point.y, dj = locs[i]; sj < end ; sj++, dj++){
                         dest[dj] = src[sj];
                     }
-                } else System.arraycopy(src, point.y, dest, locs[i], length);
+                } else System.arraycopy(src, point.y, dest, locs[i], Math.min(length, dest.length - locs[i]));
             }
         }
     }
