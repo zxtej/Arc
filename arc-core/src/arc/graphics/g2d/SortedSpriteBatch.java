@@ -163,7 +163,6 @@ public class SortedSpriteBatch extends SpriteBatch{
     ForkJoinPool commonPool = ForkJoinPool.commonPool();
     DrawRequest[] copy = new DrawRequest[0];
     int[] locs = new int[contiguous.length];
-    int[] keys = new int[radix_length];
 
     protected void sortRequests(){
         if (mt) {
@@ -173,66 +172,12 @@ public class SortedSpriteBatch extends SpriteBatch{
         }
     }
 
-    private final static int bits = 13, radix_length = 1 << bits, mask = radix_length - 1, runs = (26 + bits - 1) / bits;
-    // TODO: for up to z = 256, we only need to radix the last 26 bits. so take length of 9?
-    int[] keysBlank = new int[radix_length];
-    protected Point3[] radixSort(Point3[] arr, final int end){
-        Point3[] contiguousCopy = this.contiguousCopy;
-        int[] keys = this.keys;
-        for(int d = 0; d < runs; d++){
-            System.arraycopy(keysBlank, 0, keys, 0, radix_length);
-            for(int i = 0; i < end; i++){
-                keys[arr[i].x & mask]++;
-            }
-            for(int i = 1; i < radix_length; i++){
-                keys[i] += keys[i - 1];
-            }
-            for(int i = end - 1; i >= 0; i--){
-                Point3 curr = arr[i];
-                contiguousCopy[--keys[curr.x & mask]] = curr;
-                curr.x >>= bits;
-            }
-            Point3[] temp = arr;
-            arr = contiguousCopy;
-            contiguousCopy = temp;
-        }
-        return arr;
-    }
-
-    protected Point3[] countingSort(Point3[] arr, final int end){
-        int[] sortedToInsertion = new int[this.keys.length];
-        int unique = 0;
-        int[] locs = this.locs, keys = this.keys;
-        for(int i = 0; i < end; i++){
-            int num = arr[i].x;
-            int loc = Arrays.binarySearch(keys, 0, unique, num);
-            if(loc < 0){
-                loc = -loc - 1;
-                System.arraycopy(keys, loc, keys, loc + 1, unique - loc);
-                System.arraycopy(sortedToInsertion, loc, sortedToInsertion, loc + 1, unique - loc);
-                arr[i].x = sortedToInsertion[loc] = unique;
-                keys[loc] = num; // TODO: ensure keys has enough capacity
-                locs[unique++] = 1;
-            } else {
-                locs[arr[i].x = sortedToInsertion[loc]]++;
-            }
-        }
-        for(int i = 1; i < unique; i++){
-            locs[sortedToInsertion[i]] += locs[sortedToInsertion[i - 1]];
-        }
-        Point3[] arrCopy = this.contiguousCopy;
-        for(int i = end - 1; i >= 0; i--){
-            Point3 curr = arr[i];
-            arrCopy[--locs[curr.x]] = curr;
-        }
-        return arrCopy;
-    }
     protected void sortRequestsMT(){
         Time.mark(); Time.mark();
         final int numRequests = requests.size;
         if(copy.length < numRequests) copy = new DrawRequest[numRequests + (numRequests >> 3)];
-        final DrawRequest[] items = copy;
-        System.arraycopy(requests.items, 0, items, 0, numRequests);
+        final DrawRequest[] items = requests.items, itemCopy = copy;
+        Future<?> initTask = commonPool.submit(() -> System.arraycopy(items, 0, itemCopy, 0, numRequests));
 
         float t_init = Time.elapsed(); Time.mark();
 
@@ -259,7 +204,6 @@ public class SortedSpriteBatch extends SpriteBatch{
         float t_cont = Time.elapsed(); Time.mark();
 
         final int L = ci;
-        if(locs.length < L) locs = new int[L + L / 10];
 
         this.contiguous = contiguous;
         if(contiguousCopy.length < contiguous.length){
@@ -267,18 +211,23 @@ public class SortedSpriteBatch extends SpriteBatch{
         }
 
         //Arrays.parallelSort(contiguous, 0, L, Structs.comparingInt(p -> p.x));
-        contiguous = radix ? radixSort(contiguous, L) : countingSort(contiguous, L);
+        contiguous = radix ? RadixSort.radixSortST(contiguous, contiguousCopy, L) : CountingSort.countingSortST(contiguous, contiguousCopy, L);
 
         float t_sort = Time.elapsed(); Time.mark();
 
+        if(locs.length < L + 1) locs = new int[L + L / 10];
         int[] locs = this.locs;
-        locs[0] = 0;
-        for(int i = 0; i < L - 1; i++){
+        for(int i = 0; i < L; i++){
             locs[i + 1] = locs[i] + contiguous[i].z;
         }
+        try {
+            initTask.get();
+        } catch (Exception ignored){
+            System.arraycopy(items, 0, itemCopy, 0, numRequests);
+        }
         PopulateTask.tasks = contiguous;
-        PopulateTask.src = items;
-        PopulateTask.dest = requests.items;
+        PopulateTask.src = itemCopy;
+        PopulateTask.dest = items;
         PopulateTask.locs = locs;
         commonPool.invoke(new PopulateTask(0, L));
         float t_cpy = Time.elapsed();
@@ -324,7 +273,7 @@ public class SortedSpriteBatch extends SpriteBatch{
         if(contiguousCopy.length < contiguous.length){
             contiguousCopy = new Point3[contiguous.length];
         }
-        contiguous = radix ? radixSort(contiguous, L) : countingSort(contiguous, L);
+        contiguous = radix ? RadixSort.radixSortST(contiguous, contiguousCopy, L) : CountingSort.countingSortST(contiguous, contiguousCopy, L);
         //Arrays.sort(contiguous, 0, L, Structs.comparingInt(p -> p.x));
         float t_sort = Time.elapsed(); Time.mark();
 
@@ -392,28 +341,115 @@ public class SortedSpriteBatch extends SpriteBatch{
             debug = dump = false;
         }
     }
+    static class CountingSort{
+        private static int keyLength = 100; // The maximum number of unique values to sort
+        private static int[] keys = new int[keyLength], locs = new int[keyLength], sortedToInsertion = new int[keyLength];
+        public static Point3[] countingSortST(Point3[] arr, Point3[] swap, final int end){
+            int unique = 0, keyLength = CountingSort.keyLength;
+            int[] locs = CountingSort.locs, keys = CountingSort.keys, sortedToInsertion = CountingSort.sortedToInsertion;
+            for(int i = 0; i < end; i++){
+                int num = arr[i].x;
+                int loc = Arrays.binarySearch(keys, 0, unique, num);
+                if(loc < 0){
+                    loc = -loc - 1;
+                    if(unique >= keyLength){
+                        final int oldLength = keyLength;
+                        CountingSort.keyLength = keyLength = keyLength * 3 / 2;
+                        int[] temp;
+                        System.arraycopy(keys, 0, temp = new int[keyLength], 0, oldLength);
+                        CountingSort.keys = keys = temp;
+                        System.arraycopy(locs, 0, temp = new int[keyLength], 0, oldLength);
+                        CountingSort.locs = locs = temp;
+                        System.arraycopy(sortedToInsertion, 0, temp = new int[keyLength], 0, oldLength);
+                        CountingSort.sortedToInsertion = sortedToInsertion = temp;
+                    }
+                    System.arraycopy(keys, loc, keys, loc + 1, unique - loc);
+                    System.arraycopy(sortedToInsertion, loc, sortedToInsertion, loc + 1, unique - loc);
+                    arr[i].x = sortedToInsertion[loc] = unique;
+                    keys[loc] = num;
+                    locs[unique++] = 1;
+                } else {
+                    locs[arr[i].x = sortedToInsertion[loc]]++;
+                }
+            }
+            for(int i = 1; i < unique; i++){
+                locs[sortedToInsertion[i]] += locs[sortedToInsertion[i - 1]];
+            }
+            for(int i = end - 1; i >= 0; i--){
+                Point3 curr = arr[i];
+                swap[--locs[curr.x]] = curr;
+            }
+            return swap;
+        }
+    }
+    static class RadixSort{
+        private final static int bits = 13, radix_length = 1 << bits, mask = radix_length - 1, runs = (26 + bits - 1) / bits;
+        private final static int[] radixBuckets = new int[radix_length], bucketsBlank = new int[radix_length];
+        // For up to z = 256, we only need to radix the last 26 bits.
+        public static Point3[] radixSortST(Point3[] arr, Point3[] swap, final int end){
+            int[] keys = RadixSort.radixBuckets;
+            for(int d = 0; d < runs; d++){
+                System.arraycopy(bucketsBlank, 0, keys, 0, radix_length);
+                for(int i = 0; i < end; i++){
+                    keys[arr[i].x & mask]++;
+                }
+                for(int i = 1; i < radix_length; i++){
+                    keys[i] += keys[i - 1];
+                }
+                for(int i = end - 1; i >= 0; i--){
+                    Point3 curr = arr[i];
+                    swap[--keys[curr.x & mask]] = curr;
+                    curr.x >>= bits;
+                }
+                Point3[] temp = arr;
+                arr = swap;
+                swap = temp;
+            }
+            return arr;
+        }
+    }
     static class PopulateTask extends RecursiveAction{
         int from, to;
         static Point3[] tasks;
         static DrawRequest[] src;
         static DrawRequest[] dest;
-        public static int[] locs;
-        private static final int threshold = 100; //TODO make this adaptive?
+        static int[] locs;
+        //private static final int threshold = 256;
         PopulateTask(int from, int to){
             this.from = from;
             this.to = to;
         }
         @Override
+        /*
         protected void compute(){
             if(to - from > threshold){
                 int mid = (from + to) >> 1;
                 PopulateTask t1 = new PopulateTask(from, mid), t2 = new PopulateTask(mid, to);
                 invokeAll(t1, t2);
             } else {
+                Point3[] tasks = PopulateTask.tasks;
+                int[] locs = PopulateTask.locs;
                 for(int i = from; i < to; i++){
                     Point3 point = tasks[i];
                     System.arraycopy(src, point.y, dest, locs[i], point.z);
                 }
+            }
+        }
+         */
+        protected void compute(){
+            int[] locs = PopulateTask.locs;
+            if(to - from > 1 && locs[to] - locs[from] > 4096){
+                int half = (locs[to] + locs[from]) >> 1;
+                int mid = Arrays.binarySearch(locs, from, to, half);
+                if(mid < 0) mid = -mid - 1;
+                if(mid != from && mid != to) {
+                    invokeAll(new PopulateTask(from, mid), new PopulateTask(mid, to));
+                    return;
+                }
+            }
+            for(int i = from; i < to; i++){
+                Point3 point = tasks[i];
+                System.arraycopy(src, point.y, dest, locs[i], point.z);
             }
         }
     }
