@@ -231,17 +231,14 @@ public class Fill{
                 float py3 = Angles.trnsy(space * (i + 2) + rotation, radius);
                 quad(x, y, x + px, y + py, x + px2, y + py2, x + px3, y + py3);
             }
+            if(sides < 4 || (sides & 1) == 0) return;
 
-            int mod = sides % 2;
-
-            if(mod == 0 || sides < 4) return;
-
-            int i = sides - 1;
+            final int i = sides - 1;
 
             float px = Angles.trnsx(space * i + rotation, radius);
             float py = Angles.trnsy(space * i + rotation, radius);
-            float px2 = Angles.trnsx(space * (i + 1) + rotation, radius);
-            float py2 = Angles.trnsy(space * (i + 1) + rotation, radius);
+            float px2 = Angles.trnsx(space * sides + rotation, radius);
+            float py2 = Angles.trnsy(space * sides + rotation, radius);
             tri(x, y, x + px, y + py, x + px2, y + py2);
         }
     }
