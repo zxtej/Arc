@@ -161,7 +161,7 @@ public class SortedSpriteBatch extends SpriteBatch{
         }
     }
 
-    public static boolean debug = false, dump = false, fs = false, zs = false, mt = true, radix = false;
+    public static boolean debug = false, dump = false, fs = false, zs = false, mt = true, radix = false, iimap = true;
     Point3[] contiguous = new Point3[2048], contiguousCopy = new Point3[2048];
     { for(int i = 0; i < contiguous.length; i++) contiguous[i] = new Point3(); }
     final ForkJoinPool commonPool = ForkJoinPool.commonPool();
@@ -210,7 +210,8 @@ public class SortedSpriteBatch extends SpriteBatch{
 
         if(contiguousCopy.length < contiguous.length) this.contiguousCopy = new Point3[contiguous.length];
 
-        final Point3[] sorted = radix ? RadixSort.radixSortST(contiguous, contiguousCopy, L) : CountingSort.countingSortST(contiguous, contiguousCopy, L);
+        final Point3[] sorted = radix ? RadixSort.radixSortST(contiguous, contiguousCopy, L) :
+                iimap ? CountingSort.countingSortMap(contiguous, contiguousCopy, L) : CountingSort.countingSortST(contiguous, contiguousCopy, L);
 
         float t_sort = Time.elapsed(); Time.mark();
 
@@ -372,6 +373,42 @@ public class SortedSpriteBatch extends SpriteBatch{
             for(int i = end - 1; i >= 0; i--){
                 Point3 curr = arr[i];
                 swap[--locs2[curr.x]] = curr;
+            }
+            return swap;
+        }
+        private static final IntIntMap counts = new IntIntMap(1023); // 11 bits in first mask thing. winning?
+        private static Point2[] entries = new Point2[100];
+        static { for(int i = 0; i < entries.length; i++) entries[i] = new Point2(); }
+        public static Point3[] countingSortMap(final Point3[] arr, final Point3[] swap, final int end){
+            IntIntMap counts = CountingSort.counts;
+            counts.clear();
+            for(int i = 0; i < end; i++){
+                counts.increment(arr[i].x, 0, 1);
+            }
+
+            final int unique = counts.size;
+            if(entries.length < unique){
+                final int prevLength = entries.length;
+                entries = Arrays.copyOf(entries, unique + (unique >> 3));
+                final Point2[] entries = CountingSort.entries;
+                for(int i = prevLength; i < entries.length; i++) entries[i] = new Point2();
+            }
+            final Point2[] entries = CountingSort.entries;
+
+            final IntIntMap.Entries countEntries = counts.entries();
+            int j = 0;
+            while(countEntries.hasNext){
+                IntIntMap.Entry entry = countEntries.next(); // bruh? it returns the same entry over and over again?
+                entries[j++].set(entry.key, entry.value);
+            }
+            Arrays.sort(entries, 0, unique, Structs.comparingInt(p -> p.x));
+            int pos = -1; // heh
+            for(int i = 0; i < unique; i++){
+                counts.put(entries[i].x, pos += entries[i].y);
+            }
+            for(int i = end - 1; i >= 0; i--){
+                final Point3 curr = arr[i];
+                swap[counts.increment(curr.x, 0, -1)] = curr;
             }
             return swap;
         }
