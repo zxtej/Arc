@@ -39,29 +39,6 @@ public class SortedSpriteBatch extends SpriteBatch{
         this.blending = blending;
     }
 
-    protected static String getTrace(){
-        if(!fs) return "";
-        String out = "";
-        // java 9+ has a faster StackWalker class.
-        StackTraceElement[] st = Thread.currentThread().getStackTrace();
-        for(int j = 0; j < st.length; j++){
-            StackTraceElement curr = st[j];
-            String p = curr.getClassName();
-            if(out.isEmpty()){
-                if(/*p.startsWith("arc") ||*/ p.startsWith("java") || p.contains(".graphics.")){
-                    continue;
-                }
-                out = Strings.format("@::@ (@:@)", p, curr.getMethodName(), curr.getFileName(), curr.getLineNumber());
-            } else {
-                if(p.startsWith("java") || p.contains(".graphics.") || p.contains(".UnitType") || p.contains(".Weapon")){ // or if methodName.contains("draw")?
-                    continue;
-                }
-                return Strings.format("@ | @::@ (@:@) -> @", graphics.getFrameId(), p, curr.getMethodName(), curr.getFileName(), curr.getLineNumber(), out);
-            }
-        }
-        return Strings.format("@ | @", graphics.getFrameId(), out);
-    }
-
     @Override
     protected void draw(Texture texture, float[] spriteVertices, int offset, int count){
         if(sort && !flushing){
@@ -72,12 +49,10 @@ public class SortedSpriteBatch extends SpriteBatch{
                 req.texture = texture;
                 req.blending = blending;
                 req.run = null;
-                req.from = fs ? getTrace() : "";
                 requests.add(req);
                 requestZ.add(z);
             }
         }else{
-            Batch.trace = getTrace();
             super.draw(texture, spriteVertices, offset, count);
         }
     }
@@ -100,11 +75,9 @@ public class SortedSpriteBatch extends SpriteBatch{
             req.blending = blending;
             req.texture = null;
             req.run = null;
-            req.from = fs ? getTrace() : "";
             requests.add(req);
             requestZ.add(z);
         }else{
-            Batch.trace = getTrace();
             super.draw(region, x, y, originX, originY, width, height, rotation);
         }
     }
@@ -119,11 +92,9 @@ public class SortedSpriteBatch extends SpriteBatch{
             req.color = colorPacked;
             req.z = z;
             req.texture = null;
-            req.from = fs ? getTrace() : "";
             requests.add(req);
             requestZ.add(z);
         }else{
-            Batch.trace = getTrace();
             super.draw(request);
         }
     }
@@ -147,7 +118,6 @@ public class SortedSpriteBatch extends SpriteBatch{
 
             for(int j = 0; j < requests.size; j++){
                 DrawRequest req = requests.items[j];
-                Batch.trace = req.from;
 
                 colorPacked = req.color;
                 mixColorPacked = req.mixColor;
@@ -177,7 +147,7 @@ public class SortedSpriteBatch extends SpriteBatch{
         }
     }
 
-    public static boolean debug = false, dump = false, fs = false, zs = false, mt = true, radix = false, iimap = true;
+    public static boolean debug = false, dump = false, mt = true, radix = false, iimap = true;
     Point3[] contiguous = new Point3[2048], contiguousCopy = new Point3[2048];
     { for(int i = 0; i < contiguous.length; i++) contiguous[i] = new Point3(); }
     final ForkJoinPool commonPool = ForkJoinPool.commonPool();
@@ -313,41 +283,7 @@ public class SortedSpriteBatch extends SpriteBatch{
         }
     }
     public void debugInfo() {
-        if (debug) {
-            final StringBuilder out = new StringBuilder();
-            if (zs) {
-                float prevZ = Float.MAX_VALUE;
-                int length = 0;
-                for (int i = 0; i < requests.size; i++) {
-                    float currZ = requests.items[i].z;
-                    if (currZ != prevZ) {
-                        if (prevZ != Float.MAX_VALUE) {
-                            out.append(prevZ).append(": ").append(length).append(", ");
-                        }
-                        length = 0;
-                        prevZ = currZ;
-                    }
-                    ++length;
-                }
-                out.delete(out.length() - 2, out.length());
-            }
-            if (fs) {
-                ObjectIntMap<String> map = new ObjectIntMap<>();
-                if (zs) out.append("\n");
-                for (DrawRequest dr : requests) {
-                    map.put(dr.from, map.get(dr.from, 0) + 1);
-                }
-                map.entries().forEach(e -> {
-                    out.append(e.key).append(": ").append(e.value).append(", ");
-                });
-                out.delete(out.length() - 2, out.length());
-                map.clear();
-            }
-            zs = fs = false;
-            if (out.length() > 0) Log.debug(out.toString());
-        }
-        //if(debug) Log.debug("elapsed: @ | size: @ | buckets: @", elapsed, requests.size, i);
-        if (debug && dump) {
+        if (dump) {
             StringBuilder out = new StringBuilder("Result dump:\n");
             for (DrawRequest dr : requests) {
                 out.append(dr.z).append(" ");

@@ -9,7 +9,6 @@ class DrawRequest implements Comparable<DrawRequest>{
     Texture texture;
     Blending blending;
     Runnable run;
-    String from = "";
 
     @Override
     public int compareTo(DrawRequest o){
