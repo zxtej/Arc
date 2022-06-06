@@ -140,7 +140,20 @@ public abstract class Batch implements Disposable{
         getShader().setUniformi("u_texture", 0);
     }
 
+    public static String trace = "";
     protected void switchTexture(Texture texture){
+        if(SortedSpriteBatch.fs){
+            if (trace.isEmpty()){
+                trace = SortedSpriteBatch.getTrace();
+            }
+//            TextureData data = texture.getTextureData();
+//            Log.debug("@\n          tex: @ / @ (@x@)", trace,
+//                    texture.toString().replaceFirst("arc.graphics.", ""),
+//                    data.toString().replaceFirst("arc.graphics.", ""),
+//                    texture.width, texture.height);
+            Log.debug(trace); // Replace this with the above code if you want information on the textures and all
+            trace = "";
+        }
         flush();
         lastTexture = texture;
     }

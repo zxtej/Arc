@@ -9,6 +9,8 @@ import arc.util.*;
 import java.util.*;
 import java.util.concurrent.*;
 
+import static arc.Core.graphics;
+
 public class SortedSpriteBatch extends SpriteBatch{
     protected Seq<DrawRequest> requestPool = new Seq<>(10000);
     protected Seq<DrawRequest> requests = new Seq<>(DrawRequest.class);
@@ -37,6 +39,29 @@ public class SortedSpriteBatch extends SpriteBatch{
         this.blending = blending;
     }
 
+    protected static String getTrace(){
+        if(!fs) return "";
+        String out = "";
+        // java 9+ has a faster StackWalker class.
+        StackTraceElement[] st = Thread.currentThread().getStackTrace();
+        for(int j = 0; j < st.length; j++){
+            StackTraceElement curr = st[j];
+            String p = curr.getClassName();
+            if(out.isEmpty()){
+                if(/*p.startsWith("arc") ||*/ p.startsWith("java") || p.contains(".graphics.")){
+                    continue;
+                }
+                out = Strings.format("@::@ (@:@)", p, curr.getMethodName(), curr.getFileName(), curr.getLineNumber());
+            } else {
+                if(p.startsWith("java") || p.contains(".graphics.") || p.contains(".UnitType") || p.contains(".Weapon")){ // or if methodName.contains("draw")?
+                    continue;
+                }
+                return Strings.format("@ | @::@ (@:@) -> @", graphics.getFrameId(), p, curr.getMethodName(), curr.getFileName(), curr.getLineNumber(), out);
+            }
+        }
+        return Strings.format("@ | @", graphics.getFrameId(), out);
+    }
+
     @Override
     protected void draw(Texture texture, float[] spriteVertices, int offset, int count){
         if(sort && !flushing){
@@ -47,26 +72,12 @@ public class SortedSpriteBatch extends SpriteBatch{
                 req.texture = texture;
                 req.blending = blending;
                 req.run = null;
-                if(fs) {
-                    // java 9+ has a faster StackWalker class.
-                    StackTraceElement[] st = Thread.currentThread().getStackTrace();
-                    StackTraceElement curr = null;
-                    for (int j = 0; j < st.length; j++) {
-                        String p = st[j].getClassName();
-                        if (p.startsWith("arc") || p.startsWith("java") || p.contains(".graphics.")) {
-                            continue;
-                        }
-                        curr = st[j];
-                        break;
-                    }
-                    if (curr != null) {
-                        req.from = Strings.format("@::@ (@:@)", curr.getClassName(), curr.getMethodName(), curr.getFileName(), curr.getLineNumber());
-                    } else req.from = "";
-                } else req.from = "";
+                req.from = fs ? getTrace() : "";
                 requests.add(req);
                 requestZ.add(z);
             }
         }else{
+            Batch.trace = getTrace();
             super.draw(texture, spriteVertices, offset, count);
         }
     }
@@ -89,9 +100,11 @@ public class SortedSpriteBatch extends SpriteBatch{
             req.blending = blending;
             req.texture = null;
             req.run = null;
+            req.from = fs ? getTrace() : "";
             requests.add(req);
             requestZ.add(z);
         }else{
+            Batch.trace = getTrace();
             super.draw(region, x, y, originX, originY, width, height, rotation);
         }
     }
@@ -106,9 +119,11 @@ public class SortedSpriteBatch extends SpriteBatch{
             req.color = colorPacked;
             req.z = z;
             req.texture = null;
+            req.from = fs ? getTrace() : "";
             requests.add(req);
             requestZ.add(z);
         }else{
+            Batch.trace = getTrace();
             super.draw(request);
         }
     }
@@ -132,6 +147,7 @@ public class SortedSpriteBatch extends SpriteBatch{
 
             for(int j = 0; j < requests.size; j++){
                 DrawRequest req = requests.items[j];
+                Batch.trace = req.from;
 
                 colorPacked = req.color;
                 mixColorPacked = req.mixColor;
