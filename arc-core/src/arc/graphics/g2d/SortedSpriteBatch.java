@@ -12,11 +12,12 @@ import java.util.concurrent.*;
 import static arc.Core.graphics;
 
 public class SortedSpriteBatch extends SpriteBatch{
-    protected Seq<DrawRequest> requestPool = new Seq<>(10000);
-    protected Seq<DrawRequest> requests = new Seq<>(DrawRequest.class);
+    protected DrawRequest[] requests = new DrawRequest[10000];
+    { for(int i = 0; i < requests.length; i++) requests[i] = new DrawRequest(); }
     protected boolean sort;
     protected boolean flushing;
-    protected FloatSeq requestZ = new FloatSeq();
+    protected float[] requestZ = new float[10000];
+    protected int numRequests = 0;
 
     @Override
     protected void setSort(boolean sort){
@@ -42,15 +43,17 @@ public class SortedSpriteBatch extends SpriteBatch{
     @Override
     protected void draw(Texture texture, float[] spriteVertices, int offset, int count){
         if(sort && !flushing){
+            DrawRequest[] requests = this.requests;
+            float[] requestZ = this.requestZ;
+            if(numRequests + count - offset >= requests.length) expandRequests();
             for(int i = offset; i < count; i += SPRITE_SIZE){
-                DrawRequest req = obtain();
-                req.z = z;
+                final DrawRequest req = requests[numRequests];
+                requestZ[numRequests] = req.z = z;
                 System.arraycopy(spriteVertices, i, req.vertices, 0, req.vertices.length);
                 req.texture = texture;
                 req.blending = blending;
                 req.run = null;
-                requests.add(req);
-                requestZ.add(z);
+                ++numRequests;
             }
         }else{
             super.draw(texture, spriteVertices, offset, count);
@@ -60,10 +63,11 @@ public class SortedSpriteBatch extends SpriteBatch{
     @Override
     protected void draw(TextureRegion region, float x, float y, float originX, float originY, float width, float height, float rotation){
         if(sort && !flushing){
-            DrawRequest req = obtain();
+            if(numRequests >= requests.length) expandRequests();
+            final DrawRequest req = requests[numRequests];
             req.x = x;
             req.y = y;
-            req.z = z;
+            requestZ[numRequests] = req.z = z;
             req.originX = originX;
             req.originY = originY;
             req.width = width;
@@ -75,8 +79,7 @@ public class SortedSpriteBatch extends SpriteBatch{
             req.blending = blending;
             req.texture = null;
             req.run = null;
-            requests.add(req);
-            requestZ.add(z);
+            ++numRequests;
         }else{
             super.draw(region, x, y, originX, originY, width, height, rotation);
         }
@@ -85,22 +88,28 @@ public class SortedSpriteBatch extends SpriteBatch{
     @Override
     protected void draw(Runnable request){
         if(sort && !flushing){
-            DrawRequest req = obtain();
+            if(numRequests >= requests.length) expandRequests();
+            final DrawRequest req = requests[numRequests];
             req.run = request;
             req.blending = blending;
             req.mixColor = mixColorPacked;
             req.color = colorPacked;
-            req.z = z;
+            requestZ[numRequests] = req.z = z;
             req.texture = null;
-            requests.add(req);
-            requestZ.add(z);
+            ++numRequests;
         }else{
             super.draw(request);
         }
     }
 
-    protected DrawRequest obtain(){
-        return requestPool.size > 0 ? requestPool.pop() : new DrawRequest();
+    protected void expandRequests(){
+        final DrawRequest[] requests = this.requests, newRequests = new DrawRequest[requests.length * 7 / 4];
+        System.arraycopy(requests, 0, newRequests, 0, Math.min(newRequests.length, requests.length));
+        for(int i = requests.length; i < newRequests.length; i++){
+            newRequests[i] = new DrawRequest();
+        }
+        this.requests = newRequests;
+        this.requestZ = Arrays.copyOf(requestZ, newRequests.length);
     }
 
     @Override
@@ -110,14 +119,14 @@ public class SortedSpriteBatch extends SpriteBatch{
     }
 
     protected void flushRequests(){
-        if(!flushing && !requests.isEmpty()){
+        if(!flushing && numRequests > 0){
             flushing = true;
             sortRequests();
             float preColor = colorPacked, preMixColor = mixColorPacked;
             Blending preBlending = blending;
 
-            for(int j = 0; j < requests.size; j++){
-                DrawRequest req = requests.items[j];
+            for(int j = 0; j < numRequests; j++){
+                final DrawRequest req = requests[j];
 
                 colorPacked = req.color;
                 mixColorPacked = req.mixColor;
@@ -139,9 +148,7 @@ public class SortedSpriteBatch extends SpriteBatch{
             mixColor.abgr8888(mixColorPacked);
             blending = preBlending;
 
-            requestPool.addAll(requests);
-            requests.size = 0;
-            requestZ.size = 0;
+            numRequests = 0;
 
             flushing = false;
         }
@@ -164,10 +171,10 @@ public class SortedSpriteBatch extends SpriteBatch{
 
     protected void sortRequestsMT(){
         Time.mark(); Time.mark();
-        final int numRequests = requests.size;
+        final int numRequests = this.numRequests;
         if(copy.length < numRequests) copy = new DrawRequest[numRequests + (numRequests >> 3)];
-        final DrawRequest[] items = requests.items, itemCopy = copy;
-        final float[] itemZ = requestZ.items;
+        final DrawRequest[] items = requests, itemCopy = copy;
+        final float[] itemZ = requestZ;
         final Future<?> initTask = commonPool.submit(() -> System.arraycopy(items, 0, itemCopy, 0, numRequests));
 
         float t_init = Time.elapsed(); Time.mark();
@@ -226,11 +233,11 @@ public class SortedSpriteBatch extends SpriteBatch{
     }
     protected void sortRequestsST(){ // Non-threaded implementation for weak devices
         Time.mark(); Time.mark();
-        final int numRequests = requests.size;
+        final int numRequests = this.numRequests;
         if(copy.length < numRequests) copy = new DrawRequest[numRequests + (numRequests >> 3)];
         final DrawRequest[] items = copy;
-        final float[] itemZ = this.requestZ.items;
-        System.arraycopy(requests.items, 0, items, 0, numRequests);
+        final float[] itemZ = requestZ;
+        System.arraycopy(requests, 0, items, 0, numRequests);
         float t_init = Time.elapsed(); Time.mark();
         Point3[] contiguous = this.contiguous;
         int ci = 0, cl = contiguous.length;
@@ -262,14 +269,14 @@ public class SortedSpriteBatch extends SpriteBatch{
         float t_sort = Time.elapsed(); Time.mark();
 
         int ptr = 0;
-        final DrawRequest[] dest = requests.items;
+        final DrawRequest[] dest = requests;
         for(int i = 0; i < L; i++){
             final Point3 point = sorted[i];
             final int length = point.z;
             if(length < 10){
                 final int end = point.y + length;
                 for(int sj = point.y, dj = ptr; sj < end ; sj++, dj++){
-                    requests.items[dj] = items[sj];
+                    dest[dj] = items[sj];
                 }
             } else System.arraycopy(items, point.y, dest, ptr, length);
             ptr += point.z;
