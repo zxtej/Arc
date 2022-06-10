@@ -1,5 +1,6 @@
 package arc.graphics.g2d;
 
+import arc.func.*;
 import arc.graphics.*;
 import arc.graphics.gl.*;
 import arc.math.geom.*;
@@ -203,8 +204,7 @@ public class SortedSpriteBatch extends SpriteBatch{
 
         if(contiguousCopy.length < contiguous.length) this.contiguousCopy = new Point3[contiguous.length];
 
-        final Point3[] sorted = radix ? RadixSort.radixSortST(contiguous, contiguousCopy, L) :
-                iimap ? CountingSort.countingSortMap(contiguous, contiguousCopy, L) : CountingSort.countingSortST(contiguous, contiguousCopy, L);
+        final Point3[] sorted = radix ? RadixSort.radixSortST(contiguous, contiguousCopy, L) : CountingSort.countingSortMapMT(contiguous, contiguousCopy, L);
 
         float t_sort = Time.elapsed(); Time.mark();
 
@@ -263,7 +263,7 @@ public class SortedSpriteBatch extends SpriteBatch{
 
         if(contiguousCopy.length < contiguous.length) contiguousCopy = new Point3[contiguous.length];
 
-        final Point3[] sorted = radix ? RadixSort.radixSortST(contiguous, contiguousCopy, L) : CountingSort.countingSortST(contiguous, contiguousCopy, L);
+        final Point3[] sorted = radix ? RadixSort.radixSortST(contiguous, contiguousCopy, L) : CountingSort.countingSortMap(contiguous, contiguousCopy, L);
         //Arrays.sort(contiguous, 0, L, Structs.comparingInt(p -> p.x));
 
         float t_sort = Time.elapsed(); Time.mark();
@@ -300,44 +300,135 @@ public class SortedSpriteBatch extends SpriteBatch{
         }
     }
     static class CountingSort{
-        private static int keyLength = 100; // The maximum number of unique values to sort
-        private static int[] keys = new int[keyLength], locs = new int[keyLength], sortedToInsertion = new int[keyLength];
-        public static Point3[] countingSortST(final Point3[] arr, final Point3[] swap, final int end){
-            int unique = 0, keyLength = CountingSort.keyLength;
-            int[] locs = CountingSort.locs, keys = CountingSort.keys, sortedToInsertion = CountingSort.sortedToInsertion;
-            for(int i = 0; i < end; i++){
-                int num = arr[i].x;
-                int loc = Arrays.binarySearch(keys, 0, unique, num);
-                if(loc < 0){
-                    loc = -loc - 1;
-                    if(unique >= keyLength){
-                        CountingSort.keyLength = keyLength = keyLength * 3 / 2;
-                        CountingSort.keys = keys = Arrays.copyOf(keys, keyLength);
-                        CountingSort.locs = locs = Arrays.copyOf(locs, keyLength);
-                        CountingSort.sortedToInsertion = sortedToInsertion = Arrays.copyOf(sortedToInsertion, keyLength);
+        private static final int processors = Runtime.getRuntime().availableProcessors() * 8;
+        private static final ForkJoinPool commonPool = ForkJoinPool.commonPool();
+
+        private static int[] locs = new int[100];
+        private static final int[][] locses = new int[processors][100];
+
+        private static final IntIntMap counts = new IntIntMap(100);
+        private static final IntIntMap[] countses = new IntIntMap[processors];
+        static { for(int i = 0; i < countses.length; i++) countses[i] = new IntIntMap(); }
+
+        private static Point2[] entries = new Point2[100];
+        static { for(int i = 0; i < entries.length; i++) entries[i] = new Point2(); }
+
+        private static Point3[] entries3 = new Point3[100];
+        static { for(int i = 0; i < entries3.length; i++) entries3[i] = new Point3(); }
+
+        static class CountingSortTask implements Runnable{
+            static Point3[] arr;
+            int start, end, id;
+            public void set(int start, int end, int id){
+                this.start = start;
+                this.end = end;
+                this.id = id;
+            }
+            @Override
+            public void run(){
+                final int id = this.id, start = this.start, end = this.end;
+                int[] locs = locses[id];
+                final Point3[] arr = CountingSortTask.arr;
+                final IntIntMap counts = countses[id];
+                counts.clear();
+                int unique = 0;
+                for(int i = start; i < end; i++){
+                    int loc = counts.getOrPut(arr[i].x, unique);
+                    arr[i].x = loc;
+                    if(loc == unique){
+                        if(unique >= locs.length){
+                            locs = Arrays.copyOf(locs, unique * 3 / 2);
+                        }
+                        locs[unique++] = 1;
+                    }else{
+                        locs[loc]++;
                     }
-                    System.arraycopy(keys, loc, keys, loc + 1, unique - loc);
-                    System.arraycopy(sortedToInsertion, loc, sortedToInsertion, loc + 1, unique - loc);
-                    arr[i].x = sortedToInsertion[loc] = unique;
-                    keys[loc] = num;
-                    locs[unique++] = 1;
-                } else {
-                    locs[arr[i].x = sortedToInsertion[loc]]++;
+                }
+                locses[id] = locs;
+            }
+        }
+        static class CountingSortTask2 implements Runnable{
+            static Point3[] src, dest;
+            int start, end, id;
+            public void set(int start, int end, int id){
+                this.start = start;
+                this.end = end;
+                this.id = id;
+            }
+            @Override
+            public void run(){
+                final int start = this.start, end = this.end;
+                final int[] locs = locses[id];
+                final Point3[] src = CountingSortTask2.src, dest = CountingSortTask2.dest;
+                for(int i = end - 1; i >= start; i--){
+                    final Point3 curr = src[i];
+                    dest[--locs[curr.x]] = curr;
                 }
             }
-            final int[] locs2 = locs, sortedToInsertion2 = sortedToInsertion;
-            for(int i = 1; i < unique; i++){
-                locs2[sortedToInsertion2[i]] += locs2[sortedToInsertion2[i - 1]];
+        }
+
+        private static final CountingSortTask[] tasks = new CountingSortTask[processors];
+        private static final CountingSortTask2[] task2s = new CountingSortTask2[processors];
+        private static final Future<?>[] futures = new Future<?>[processors];
+        static { for(int i = 0; i < processors; i++){ tasks[i] = new CountingSortTask(); task2s[i] = new CountingSortTask2(); }}
+        public static Point3[] countingSortMapMT(final Point3[] arr, final Point3[] swap, final int end){
+            final IntIntMap[] countses = CountingSort.countses;
+            final int[][] locs = CountingSort.locses;
+            final int threads = Math.min(processors, (end + 4095) / 4096); // 4096 Point3s to process per thread
+            final int thread_size = end / threads + 1;
+            final CountingSortTask[] tasks = CountingSort.tasks;
+            final CountingSortTask2[] task2s = CountingSort.task2s;
+            final Future<?>[] futures = CountingSort.futures;
+            CountingSortTask.arr = CountingSortTask2.src = arr;
+            CountingSortTask2.dest = swap;
+            for(int s = 0, thread = 0; thread < threads; thread++, s += thread_size){
+                CountingSortTask task = tasks[thread];
+                final int stop = Math.min(s + thread_size, end);
+                task.set(s, stop, thread);
+                task2s[thread].set(s, stop, thread);
+                futures[thread] = commonPool.submit(task);
             }
-            for(int i = end - 1; i >= 0; i--){
-                Point3 curr = arr[i];
-                swap[--locs2[curr.x]] = curr;
+
+            int unique = 0;
+            for(int i = 0; i < threads; i++){
+                try{ futures[i].get(); } catch(ExecutionException | InterruptedException e){ commonPool.execute(tasks[i]); }
+                unique += countses[i].size;
+            }
+
+            if(entries3.length < unique){
+                final int prevLength = entries3.length;
+                entries3 = Arrays.copyOf(entries3, unique * 3 / 2);
+                final Point3[] entries = CountingSort.entries3;
+                for(int i = prevLength; i < entries.length; i++) entries[i] = new Point3();
+            }
+            final Point3[] entries = CountingSort.entries3;
+            int j = 0;
+            for(int i = 0; i < threads; i++){
+                if(countses[i].size == 0) continue;
+                final IntIntMap.Entries countEntries = countses[i].entries();
+                final IntIntMap.Entry entry = countEntries.next();
+                entries[j++].set(entry.key, entry.value, i);
+                while(countEntries.hasNext){
+                    countEntries.next();
+                    entries[j++].set(entry.key, entry.value, i);
+                }
+            }
+
+            Arrays.sort(entries, 0, unique, Structs.comparingInt(p -> p.x));
+
+            for(int i = 0, pos = 0; i < unique; i++){
+                final Point3 curr = entries[i];
+                pos = (locs[curr.z][curr.y] += pos);
+            }
+
+            for(int thread = 0; thread < threads; thread++){
+                futures[thread] = commonPool.submit(task2s[thread]);
+            }
+            for(int i = 0; i < threads; i++){
+                try{ futures[i].get(); } catch(ExecutionException | InterruptedException e){ commonPool.execute(task2s[i]); }
             }
             return swap;
         }
-        private static final IntIntMap counts = new IntIntMap(100);
-        private static Point2[] entries = new Point2[100];
-        static { for(int i = 0; i < entries.length; i++) entries[i] = new Point2(); }
         public static Point3[] countingSortMap(final Point3[] arr, final Point3[] swap, final int end){
             int[] locs = CountingSort.locs;
             final IntIntMap counts = CountingSort.counts;
