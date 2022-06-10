@@ -1,3 +1,4 @@
+rootProject.name = "arc"
 include ":arc-core"
 
 include ":extensions"
@@ -11,7 +12,7 @@ include ":extensions:g3d"
 include ":extensions:box2d"
 include ":extensions:tiled"
 include ":extensions:discord"
-include ":extensions:profiler"
+include ":extensions:profiling"
 
 include ":backends"
 include ":backends:backend-android"
@@ -30,5 +31,3 @@ include ":natives:natives-box2d-desktop"
 include ":natives:natives-box2d-android"
 include ":natives:natives-box2d-ios"
 include ":natives:natives-freetype-ios"
-
-rootProject.name = "arc"

@@ -134,6 +134,10 @@ public class Time{
         return nanos() - prevTime;
     }
 
+    public static float millisSinceNanos(long prevTime){
+        return (nanos() - prevTime) / (float)nanosPerMilli;
+    }
+
     /**
      * Get the time in millis passed since a previous time
      * @param prevTime - must be milliseconds

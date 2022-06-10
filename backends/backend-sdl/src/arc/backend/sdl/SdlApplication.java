@@ -118,6 +118,7 @@ public class SdlApplication implements Application{
             check(() -> SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE));
         }
 
+        check(() -> SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1));
         check(() -> SDL_GL_SetAttribute(SDL_GL_RED_SIZE, config.r));
         check(() -> SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, config.g));
         check(() -> SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, config.b));

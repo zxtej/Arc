@@ -76,7 +76,7 @@ public class SortedSpriteBatch extends SpriteBatch{
             final DrawRequest req = requests[numRequests];
             req.x = x;
             req.y = y;
-            requestZ[numRequests] = req.z = z;
+            requestZ[numRequests++] = req.z = z;
             req.originX = originX;
             req.originY = originY;
             req.width = width;
@@ -88,7 +88,6 @@ public class SortedSpriteBatch extends SpriteBatch{
             req.blending = blending;
             req.texture = null;
             req.run = null;
-            ++numRequests;
         }else{
             super.draw(region, x, y, originX, originY, width, height, rotation);
         }
