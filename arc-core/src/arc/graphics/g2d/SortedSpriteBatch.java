@@ -155,9 +155,8 @@ public class SortedSpriteBatch extends SpriteBatch{
         }
     }
 
-    public static boolean debug = false, dump = false, mt = true, radix = false, iimap = true;
-    Point3[] contiguous = new Point3[2048], contiguousCopy = new Point3[2048];
-    { for(int i = 0; i < contiguous.length; i++) contiguous[i] = new Point3(); }
+    public static boolean debug = false, dump = false, mt = true;
+    int[] contiguous = new int[2048], contiguousCopy = new int[2048];
     final ForkJoinPool commonPool = ForkJoinPool.commonPool();
     DrawRequest[] copy = new DrawRequest[0];
     int[] locs = new int[contiguous.length];
@@ -180,38 +179,41 @@ public class SortedSpriteBatch extends SpriteBatch{
 
         float t_init = Time.elapsed(); Time.mark();
 
-        Point3[] contiguous = this.contiguous;
+        int[] contiguous = this.contiguous;
         int ci = 0, cl = contiguous.length;
         float z = itemZ[0];
         int startI = 0;
         // Point3: <z, index, length>
         for(int i = 1; i < numRequests; i++){
             if(itemZ[i] != z){ // if contiguous section should end
-                contiguous[ci++].set(Float.floatToRawIntBits(z + 16f), startI, i - startI);
-                if(ci >= cl){
+                contiguous[ci] = Float.floatToRawIntBits(z + 16f);
+                contiguous[ci + 1] = startI;
+                contiguous[ci + 2] = i - startI;
+                ci += 3;
+                if(ci + 3 > cl){
                     contiguous = Arrays.copyOf(contiguous, cl <<= 1);
-                    for(int j = ci; j < cl; j++) contiguous[j] = new Point3();
                 }
-                z = itemZ[i];
-                startI = i;
+                z = itemZ[startI = i];
             }
         }
-        contiguous[ci++].set(Float.floatToRawIntBits(z + 16f), startI, numRequests - startI);
+        contiguous[ci] = Float.floatToRawIntBits(z + 16f);
+        contiguous[ci + 1] = startI;
+        contiguous[ci + 2] = numRequests - startI;
         this.contiguous = contiguous;
         float t_cont = Time.elapsed(); Time.mark();
 
-        final int L = ci;
+        final int L = (ci / 3) + 1;
 
-        if(contiguousCopy.length < contiguous.length) this.contiguousCopy = new Point3[contiguous.length];
+        if(contiguousCopy.length < contiguous.length) this.contiguousCopy = new int[contiguous.length];
 
-        final Point3[] sorted = radix ? RadixSort.radixSortST(contiguous, contiguousCopy, L) : CountingSort.countingSortMapMT(contiguous, contiguousCopy, L);
+        final int[] sorted = CountingSort.countingSortMapMT(contiguous, contiguousCopy, L);
 
         float t_sort = Time.elapsed(); Time.mark();
 
         if(locs.length < L + 1) locs = new int[L + L / 10];
         final int[] locs = this.locs;
         for(int i = 0; i < L; i++){
-            locs[i + 1] = locs[i] + sorted[i].z;
+            locs[i + 1] = locs[i] + sorted[i * 3 + 2];
         }
         try {
             initTask.get();
@@ -239,47 +241,49 @@ public class SortedSpriteBatch extends SpriteBatch{
         final float[] itemZ = requestZ;
         System.arraycopy(requests, 0, items, 0, numRequests);
         float t_init = Time.elapsed(); Time.mark();
-        Point3[] contiguous = this.contiguous;
+        int[] contiguous = this.contiguous;
         int ci = 0, cl = contiguous.length;
         float z = itemZ[0];
         int startI = 0;
         // Point3: <z, index, length>
         for(int i = 1; i < numRequests; i++){
             if(itemZ[i] != z){ // if contiguous section should end
-                contiguous[ci++].set(Float.floatToRawIntBits(z + 16f), startI, i - startI);
-                if(ci >= cl){
+                contiguous[ci] = Float.floatToRawIntBits(z + 16f);
+                contiguous[ci + 1] = startI;
+                contiguous[ci + 2] = i - startI;
+                ci += 3;
+                if(ci + 3 > cl){
                     contiguous = Arrays.copyOf(contiguous, cl <<= 1);
-                    for(int j = ci; j < cl; j++) contiguous[j] = new Point3();
                 }
-                z = itemZ[i];
-                startI = i;
+                z = itemZ[startI = i];
             }
         }
-        contiguous[ci++].set(Float.floatToRawIntBits(z + 16f), startI, numRequests - startI);
+        contiguous[ci] = Float.floatToRawIntBits(z + 16f);
+        contiguous[ci + 1] = startI;
+        contiguous[ci + 2] = numRequests - startI;
         this.contiguous = contiguous;
         float t_cont = Time.elapsed(); Time.mark();
 
-        final int L = ci;
+        final int L = (ci / 3) + 1;
 
-        if(contiguousCopy.length < contiguous.length) contiguousCopy = new Point3[contiguous.length];
+        if(contiguousCopy.length < contiguous.length) contiguousCopy = new int[contiguous.length];
 
-        final Point3[] sorted = radix ? RadixSort.radixSortST(contiguous, contiguousCopy, L) : CountingSort.countingSortMap(contiguous, contiguousCopy, L);
+        final int[] sorted = CountingSort.countingSortMap(contiguous, contiguousCopy, L);
         //Arrays.sort(contiguous, 0, L, Structs.comparingInt(p -> p.x));
 
         float t_sort = Time.elapsed(); Time.mark();
 
         int ptr = 0;
         final DrawRequest[] dest = requests;
-        for(int i = 0; i < L; i++){
-            final Point3 point = sorted[i];
-            final int length = point.z;
+        for(int i = 0; i < L * 3; i += 3){
+            final int pos = sorted[i + 1], length = sorted[i + 2];
             if(length < 10){
-                final int end = point.y + length;
-                for(int sj = point.y, dj = ptr; sj < end ; sj++, dj++){
+                final int end = pos + length;
+                for(int sj = pos, dj = ptr; sj < end ; sj++, dj++){
                     dest[dj] = items[sj];
                 }
-            } else System.arraycopy(items, point.y, dest, ptr, length);
-            ptr += point.z;
+            } else System.arraycopy(items, pos, dest, ptr, Math.min(length, dest.length - ptr));
+            ptr += length;
         }
         float t_cpy = Time.elapsed();
         float elapsed = Time.elapsed();
@@ -306,18 +310,17 @@ public class SortedSpriteBatch extends SpriteBatch{
         private static int[] locs = new int[100];
         private static final int[][] locses = new int[processors][100];
 
-        private static final IntIntMap counts = new IntIntMap(100);
         private static final IntIntMap[] countses = new IntIntMap[processors];
         static { for(int i = 0; i < countses.length; i++) countses[i] = new IntIntMap(); }
 
         private static Point2[] entries = new Point2[100];
         static { for(int i = 0; i < entries.length; i++) entries[i] = new Point2(); }
 
-        private static Point3[] entries3 = new Point3[100];
-        static { for(int i = 0; i < entries3.length; i++) entries3[i] = new Point3(); }
+        private static int[] entries3 = new int[300], entries3a = new int[300];
+        private static Integer[] entriesBacking = new Integer[100];
 
         static class CountingSortTask implements Runnable{
-            static Point3[] arr;
+            static int[] arr;
             int start, end, id;
             public void set(int start, int end, int id){
                 this.start = start;
@@ -328,13 +331,13 @@ public class SortedSpriteBatch extends SpriteBatch{
             public void run(){
                 final int id = this.id, start = this.start, end = this.end;
                 int[] locs = locses[id];
-                final Point3[] arr = CountingSortTask.arr;
+                final int[] arr = CountingSortTask.arr;
                 final IntIntMap counts = countses[id];
                 counts.clear();
                 int unique = 0;
                 for(int i = start; i < end; i++){
-                    int loc = counts.getOrPut(arr[i].x, unique);
-                    arr[i].x = loc;
+                    int loc = counts.getOrPut(arr[i * 3], unique);
+                    arr[i * 3] = loc;
                     if(loc == unique){
                         if(unique >= locs.length){
                             locs = Arrays.copyOf(locs, unique * 3 / 2);
@@ -348,7 +351,7 @@ public class SortedSpriteBatch extends SpriteBatch{
             }
         }
         static class CountingSortTask2 implements Runnable{
-            static Point3[] src, dest;
+            static int[] src, dest;
             int start, end, id;
             public void set(int start, int end, int id){
                 this.start = start;
@@ -359,10 +362,12 @@ public class SortedSpriteBatch extends SpriteBatch{
             public void run(){
                 final int start = this.start, end = this.end;
                 final int[] locs = locses[id];
-                final Point3[] src = CountingSortTask2.src, dest = CountingSortTask2.dest;
-                for(int i = end - 1; i >= start; i--){
-                    final Point3 curr = src[i];
-                    dest[--locs[curr.x]] = curr;
+                final int[] src = CountingSortTask2.src, dest = CountingSortTask2.dest;
+                for(int i = end - 1, i3 = i * 3; i >= start; i--, i3 -= 3){
+                    final int destPos = --locs[src[i3]] * 3;
+                    dest[destPos    ] = src[i3    ];
+                    dest[destPos + 1] = src[i3 + 1];
+                    dest[destPos + 2] = src[i3 + 2];
                 }
             }
         }
@@ -371,7 +376,7 @@ public class SortedSpriteBatch extends SpriteBatch{
         private static final CountingSortTask2[] task2s = new CountingSortTask2[processors];
         private static final Future<?>[] futures = new Future<?>[processors];
         static { for(int i = 0; i < processors; i++){ tasks[i] = new CountingSortTask(); task2s[i] = new CountingSortTask2(); }}
-        public static Point3[] countingSortMapMT(final Point3[] arr, final Point3[] swap, final int end){
+        public static int[] countingSortMapMT(final int[] arr, final int[] swap, final int end){
             final IntIntMap[] countses = CountingSort.countses;
             final int[][] locs = CountingSort.locses;
             final int threads = Math.min(processors, (end + 4095) / 4096); // 4096 Point3s to process per thread
@@ -395,30 +400,45 @@ public class SortedSpriteBatch extends SpriteBatch{
                 unique += countses[i].size;
             }
 
-            if(entries3.length < unique){
-                final int prevLength = entries3.length;
-                entries3 = Arrays.copyOf(entries3, unique * 3 / 2);
-                final Point3[] entries = CountingSort.entries3;
-                for(int i = prevLength; i < entries.length; i++) entries[i] = new Point3();
+            final int L = unique;
+            if(entriesBacking.length < L){
+                entriesBacking = new Integer[L * 3 / 2];
+                entries3 = new int[L * 3 * 3 / 2];
+                entries3a = new int[L * 3 * 3 / 2];
             }
-            final Point3[] entries = CountingSort.entries3;
+            final int[] entries = CountingSort.entries3, entries3a = CountingSort.entries3a;
+            final Integer[] entriesBacking = CountingSort.entriesBacking;
             int j = 0;
             for(int i = 0; i < threads; i++){
                 if(countses[i].size == 0) continue;
                 final IntIntMap.Entries countEntries = countses[i].entries();
                 final IntIntMap.Entry entry = countEntries.next();
-                entries[j++].set(entry.key, entry.value, i);
+                entries[j    ] = entry.key;
+                entries[j + 1] = entry.value;
+                entries[j + 2] = i;
+                j += 3;
                 while(countEntries.hasNext){
                     countEntries.next();
-                    entries[j++].set(entry.key, entry.value, i);
+                    entries[j    ] = entry.key;
+                    entries[j + 1] = entry.value;
+                    entries[j + 2] = i;
+                    j += 3;
                 }
             }
 
-            Arrays.sort(entries, 0, unique, Structs.comparingInt(p -> p.x));
+            for(int i = 0; i < L; i++){
+                entriesBacking[i] = i;
+            }
+            Arrays.sort(entriesBacking, 0, L, Structs.comparingInt(i -> entries[i * 3]));
+            for(int i = 0; i < L; i++){
+                int from = entriesBacking[i] * 3, to = i * 3;
+                entries3a[to    ] = entries[from    ];
+                entries3a[to + 1] = entries[from + 1];
+                entries3a[to + 2] = entries[from + 2];
+            }
 
-            for(int i = 0, pos = 0; i < unique; i++){
-                final Point3 curr = entries[i];
-                pos = (locs[curr.z][curr.y] += pos);
+            for(int i = 0, pos = 0; i < L * 3; i += 3){
+                pos = (locs[entries3a[i + 2]][entries3a[i + 1]] += pos);
             }
 
             for(int thread = 0; thread < threads; thread++){
@@ -429,15 +449,16 @@ public class SortedSpriteBatch extends SpriteBatch{
             }
             return swap;
         }
-        public static Point3[] countingSortMap(final Point3[] arr, final Point3[] swap, final int end){
+        public static int[] countingSortMap(final int[] arr, final int[] swap, final int end){
             int[] locs = CountingSort.locs;
-            final IntIntMap counts = CountingSort.counts;
+            final IntIntMap counts = CountingSort.countses[0];
             counts.clear();
 
             int unique = 0;
-            for(int i = 0; i < end; i++){
-                int loc = counts.getOrPut(arr[i].x, unique);
-                arr[i].x = loc;
+            final int end3 = end * 3;
+            for(int i = 0; i < end3; i += 3){
+                int loc = counts.getOrPut(arr[i], unique);
+                arr[i] = loc;
                 if(loc == unique){
                     if(unique >= locs.length){
                         locs = Arrays.copyOf(locs, unique * 3 / 2);
@@ -472,42 +493,18 @@ public class SortedSpriteBatch extends SpriteBatch{
                 locs[next = entries[i].y] += locs[prev];
                 prev = next;
             }
-            for(int i = end - 1; i >= 0; i--){
-                final Point3 curr = arr[i];
-                swap[--locs[curr.x]] = curr;
+            for(int i = end - 1, i3 = i * 3; i >= 0; i--, i3 -= 3){
+                final int destPos = --locs[arr[i3]] * 3;
+                swap[destPos    ] = arr[i3    ];
+                swap[destPos + 1] = arr[i3 + 1];
+                swap[destPos + 2] = arr[i3 + 2];
             }
             return swap;
         }
     }
-    static class RadixSort{
-        private final static int bits = 13, radix_length = 1 << bits, mask = radix_length - 1, runs = (26 + bits - 1) / bits;
-        private final static int[] radixBuckets = new int[radix_length], bucketsBlank = new int[radix_length];
-        // For up to z = 256, we only need to radix the last 26 bits.
-        public static Point3[] radixSortST(Point3[] arr, Point3[] swap, final int end){
-            final int[] keys = RadixSort.radixBuckets;
-            for(int d = 0; d < runs; d++){
-                final Point3[] arr2 = arr, swap2 = swap;
-                System.arraycopy(bucketsBlank, 0, keys, 0, radix_length);
-                for(int i = 0; i < end; i++){
-                    keys[arr2[i].x & mask]++;
-                }
-                for(int i = 1; i < radix_length; i++){
-                    keys[i] += keys[i - 1];
-                }
-                for(int i = end - 1; i >= 0; i--){
-                    Point3 curr = arr2[i];
-                    swap2[--keys[curr.x & mask]] = curr;
-                    curr.x >>= bits;
-                }
-                arr = swap2;
-                swap = arr2;
-            }
-            return arr;
-        }
-    }
     static class PopulateTask extends RecursiveAction{
         int from, to;
-        static Point3[] tasks;
+        static int[] tasks;
         static DrawRequest[] src;
         static DrawRequest[] dest;
         static int[] locs;
@@ -545,16 +542,15 @@ public class SortedSpriteBatch extends SpriteBatch{
                 }
             }
             final DrawRequest[] src = PopulateTask.src, dest = PopulateTask.dest;
-            final Point3[] tasks = PopulateTask.tasks;
+            final int[] tasks = PopulateTask.tasks;
             for(int i = from; i < to; i++){
-                final Point3 point = tasks[i];
-                final int length = point.z;
+                final int point = i * 3, pos = tasks[point + 1], length = tasks[point + 2];
                 if(length < 10){
-                    final int end = point.y + length;
-                    for(int sj = point.y, dj = locs[i]; sj < end ; sj++, dj++){
+                    final int end = pos + length;
+                    for(int sj = pos, dj = locs[i]; sj < end ; sj++, dj++){
                         dest[dj] = src[sj];
                     }
-                } else System.arraycopy(src, point.y, dest, locs[i], Math.min(length, dest.length - locs[i]));
+                } else System.arraycopy(src, pos, dest, locs[i], Math.min(length, dest.length - locs[i]));
             }
         }
     }
