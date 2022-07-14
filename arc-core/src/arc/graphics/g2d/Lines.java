@@ -422,6 +422,13 @@ public class Lines{
         line(fx, fy, x2, y2);
     }
 
+    @Deprecated
+    public static void swirl(float x, float y, float radius, float fraction) { arc(x, y, radius, fraction); }
+    @Deprecated
+    public static void swirl(float x, float y, float radius, float fraction, float rotation) { arc(x, y, radius, fraction, rotation); }
+    @Deprecated
+    public static void swirl(float x, float y, float radius, float fraction, float rotation, int sides) { arc(x, y, radius, fraction, rotation, sides); }
+
     public static void arc(float x, float y, float radius, float fraction){
         arc(x, y, radius, fraction, 0f);
     }
