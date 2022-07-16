@@ -94,7 +94,7 @@ public class IntIntMap implements Iterable<IntIntMap.Entry>{
         return map;
     }
 
-    /** Only inserts into the map if value is not present.
+    /** Only inserts into the map if key is not present.
     * @param key The key.
     * @param value The value.
     * @return The associated value if key is present in the map, else {@code value}.

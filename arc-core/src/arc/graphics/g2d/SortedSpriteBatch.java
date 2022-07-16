@@ -1,6 +1,5 @@
 package arc.graphics.g2d;
 
-import arc.func.*;
 import arc.graphics.*;
 import arc.graphics.gl.*;
 import arc.math.geom.*;
@@ -10,15 +9,13 @@ import arc.util.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-import static arc.Core.graphics;
-
 public class SortedSpriteBatch extends SpriteBatch{
-    protected DrawRequest[] requests = new DrawRequest[10000];
+    protected DrawRequest[] requests = new DrawRequest[10000]; // Instead of using Seq, these DrawRequests are now permanently in place.
     { for(int i = 0; i < requests.length; i++) requests[i] = new DrawRequest(); }
     protected boolean sort;
     protected boolean flushing;
-    protected float[] requestZ = new float[10000];
-    protected int numRequests = 0;
+    protected float[] requestZ = new float[10000]; // Z values of requests, in the same order as this.requests. This is for fast lookup when sorting.
+    protected int numRequests = 0; // The number of requests, ie. the "size of the Seq"
 
     @Override
     protected void setSort(boolean sort){
@@ -155,12 +152,29 @@ public class SortedSpriteBatch extends SpriteBatch{
         }
     }
 
-    public static boolean debug = false, dump = false, mt = true;
+    /** These can be edited from in-game console, production code can implement some other criteria for using multithreading **/
+    public static boolean debug = false, mt = true;
+    /** Chunk array, and its auxiliary (copy) **/
     int[] contiguous = new int[2048], contiguousCopy = new int[2048];
     final ForkJoinPool commonPool = ForkJoinPool.commonPool();
+    /** Copy of this.requests **/
     DrawRequest[] copy = new DrawRequest[0];
+    /** Cumulative sum array for use in step 3 **/
     int[] locs = new int[contiguous.length];
 
+    /**
+     * This new implementation of sorting sprites by z-index (in order) allows for significant reduction in sorting time.
+     * The main steps are as follows:
+     * 1. Collapse the DrawRequests into chunks, where each chunk represents >=1 DrawRequests that are of the same z-layer, and are adjacent.
+     *      This chunk data can be expressed in three numbers - the z-index, the index in the original array, and the number of requests it represents
+     * 2. Sort this new array of chunks by z-index. Sorting in order is guaranteed if this step is in order.
+     * 3. Reverse step 1, ie. copy the DrawRequests into an output array
+     *
+     * From my testing, the additional (several) O(N) iterations in steps 1 and 2 still pay off, considering the cache locality gained by storing
+     * all data in a memory-contiguous primitive array.
+     *
+     * The time benchmarking and other debug-related code can be removed.
+     */
     protected void sortRequests(){
         if (mt) {
             sortRequestsMT();
@@ -169,23 +183,32 @@ public class SortedSpriteBatch extends SpriteBatch{
         }
     }
 
+    /**
+     * Multithreaded implementation of the sort, where multithreading is applied for steps 2 and 3.
+     */
     protected void sortRequestsMT(){
         Time.mark(); Time.mark();
         final int numRequests = this.numRequests;
         if(copy.length < numRequests) copy = new DrawRequest[numRequests + (numRequests >> 3)];
         final DrawRequest[] items = requests, itemCopy = copy;
         final float[] itemZ = requestZ;
-        final Future<?> initTask = commonPool.submit(() -> System.arraycopy(items, 0, itemCopy, 0, numRequests));
+
+        final Future<?> initTask = commonPool.submit(() -> System.arraycopy(items, 0, itemCopy, 0, numRequests)); // Prepare auxiliary DrawRequests array
 
         float t_init = Time.elapsed(); Time.mark();
 
+        // Step 1: Get chunks
         int[] contiguous = this.contiguous;
         int ci = 0, cl = contiguous.length;
         float z = itemZ[0];
         int startI = 0;
-        // Point3: <z, index, length>
+        // Each chunk can be expressed using Point3: <z, index, length>. Or just linearly in a int[] array.
         for(int i = 1; i < numRequests; i++){
-            if(itemZ[i] != z){ // if contiguous section should end
+            if(itemZ[i] != z){ // If chunk should end
+                // IMPORTANT: This converts a float to its corresponding int value. Z values < 16f are currently not supported (they will be reversed) for performance reasons
+                // Possible modification here for generality https://stackoverflow.com/questions/43299299/sorting-floating-point-values-using-their-byte-representation
+                //final int intZ = Float.floatToRawIntBits(z);
+                //contiguous[ci] = intZ ^ (intZ >= 0 ? 0x80000000 : 0xffffffff); // This operates under the assumption that there are no -0.0f
                 contiguous[ci] = Float.floatToRawIntBits(z + 16f);
                 contiguous[ci + 1] = startI;
                 contiguous[ci + 2] = i - startI;
@@ -204,19 +227,23 @@ public class SortedSpriteBatch extends SpriteBatch{
 
         final int L = (ci / 3) + 1;
 
+        // Step 2: Prepare the auxiliary chunks array and sort the chunks
         if(contiguousCopy.length < contiguous.length) this.contiguousCopy = new int[contiguous.length];
 
+        //TODO: A possible min count of DrawRequests can be used here, to avoid multithreaded-related overhead and call single-threaded instead.
         final int[] sorted = CountingSort.countingSortMapMT(contiguous, contiguousCopy, L);
 
         float t_sort = Time.elapsed(); Time.mark();
 
+        // Step 3: Copy the DrawRequests back into the original requests array
+        // Note that this multithreaded implementation may actually be slower for more modern devices.
         if(locs.length < L + 1) locs = new int[L + L / 10];
         final int[] locs = this.locs;
         for(int i = 0; i < L; i++){
-            locs[i + 1] = locs[i] + sorted[i * 3 + 2];
+            locs[i + 1] = locs[i] + sorted[i * 3 + 2]; // Cumulative sum of chunk lengths for faster lookup
         }
         try {
-            initTask.get();
+            initTask.get(); // Ensure that auxiliary DrawRequests array is ready
         } catch (Exception ignored){
             System.arraycopy(items, 0, itemCopy, 0, numRequests);
         }
@@ -225,12 +252,12 @@ public class SortedSpriteBatch extends SpriteBatch{
         PopulateTask.dest = items;
         PopulateTask.locs = locs;
         commonPool.invoke(new PopulateTask(0, L));
+
         float t_cpy = Time.elapsed();
         float elapsed = Time.elapsed();
         if(debug) {
             Log.debug("total: @ | size: @ -> @ | init: @ | contiguous: @ | sort: @ | populate: @",
                     elapsed, numRequests, L, t_init, t_cont, t_sort, t_cpy);
-            debugInfo();
         }
     }
     protected void sortRequestsST(){ // Non-threaded implementation for weak devices
@@ -239,15 +266,18 @@ public class SortedSpriteBatch extends SpriteBatch{
         if(copy.length < numRequests) copy = new DrawRequest[numRequests + (numRequests >> 3)];
         final DrawRequest[] items = copy;
         final float[] itemZ = requestZ;
-        System.arraycopy(requests, 0, items, 0, numRequests);
+        System.arraycopy(requests, 0, items, 0, numRequests); // Prepare auxiliary DrawRequest array
         float t_init = Time.elapsed(); Time.mark();
+
+        // Step 1: Get chunks
         int[] contiguous = this.contiguous;
         int ci = 0, cl = contiguous.length;
         float z = itemZ[0];
         int startI = 0;
         // Point3: <z, index, length>
         for(int i = 1; i < numRequests; i++){
-            if(itemZ[i] != z){ // if contiguous section should end
+            if(itemZ[i] != z){ // If chunk should end
+                // See notes on multithreaded implementation
                 contiguous[ci] = Float.floatToRawIntBits(z + 16f);
                 contiguous[ci + 1] = startI;
                 contiguous[ci + 2] = i - startI;
@@ -266,18 +296,20 @@ public class SortedSpriteBatch extends SpriteBatch{
 
         final int L = (ci / 3) + 1;
 
+        // Step 2: Prepare the auxiliary chunks array and sort the chunks
         if(contiguousCopy.length < contiguous.length) contiguousCopy = new int[contiguous.length];
 
         final int[] sorted = CountingSort.countingSortMap(contiguous, contiguousCopy, L);
-        //Arrays.sort(contiguous, 0, L, Structs.comparingInt(p -> p.x));
+        // Equivalent to Arrays.sort(contiguous, 0, L, Structs.comparingInt(p -> p.x));
 
         float t_sort = Time.elapsed(); Time.mark();
 
-        int ptr = 0;
+        // Step 3: Copy the DrawRequests back into the original requests array
+        int ptr = 0; // Starting index to copy to
         final DrawRequest[] dest = requests;
         for(int i = 0; i < L * 3; i += 3){
             final int pos = sorted[i + 1], length = sorted[i + 2];
-            if(length < 10){
+            if(length < 10){ // System.arraycopy has overhead if length is small
                 final int end = pos + length;
                 for(int sj = pos, dj = ptr; sj < end ; sj++, dj++){
                     dest[dj] = items[sj];
@@ -290,36 +322,36 @@ public class SortedSpriteBatch extends SpriteBatch{
         if(debug) {
             Log.debug("total: @ | size: @ -> @ | init: @ | contiguous: @ | sort: @ | populate: @",
                     elapsed, numRequests, L, t_init, t_cont, t_sort, t_cpy);
-            debugInfo();
         }
     }
-    public void debugInfo() {
-        if (dump) {
-            StringBuilder out = new StringBuilder("Result dump:\n");
-            for (DrawRequest dr : requests) {
-                out.append(dr.z).append(" ");
-            }
-            Log.debug(out);
-            debug = dump = false;
-        }
-    }
+
+    /**
+     * This class contains methods and utilities required for counting sort.
+     */
     static class CountingSort{
-        private static final int processors = Runtime.getRuntime().availableProcessors() * 8;
+        private static final int processors = Math.max(1, Runtime.getRuntime().availableProcessors() * 8);
         private static final ForkJoinPool commonPool = ForkJoinPool.commonPool();
 
-        private static int[] locs = new int[100];
+        /** Array to keep track of how many of each z index is present. It is also used to obtain the cumulative sum ie. destination location **/
         private static final int[][] locses = new int[processors][100];
 
+        /** IntIntMaps that allow for fast lookup to ensure z indexes are unique **/
         private static final IntIntMap[] countses = new IntIntMap[processors];
         static { for(int i = 0; i < countses.length; i++) countses[i] = new IntIntMap(); }
 
+        /** Arrays that store the unique z values and related info, for use in single threaded **/
         private static Point2[] entries = new Point2[100];
         static { for(int i = 0; i < entries.length; i++) entries[i] = new Point2(); }
 
+        /** Arrays that store the unique z values and related info, for use in multi threaded (it includes info on which thread each point2 came from) **/
         private static int[] entries3 = new int[300], entries3a = new int[300];
         private static Integer[] entriesBacking = new Integer[100];
 
-        static class CountingSortTask implements Runnable{
+        /**
+         * Task 1: Iterate through all chunks and get the unique z-values, in insertion order.
+         * This insertion order will be useful for quick lookup later on, in Task 2.
+         */
+        static class CountingSortTask1 implements Runnable{
             static int[] arr;
             int start, end, id;
             public void set(int start, int end, int id){
@@ -331,13 +363,14 @@ public class SortedSpriteBatch extends SpriteBatch{
             public void run(){
                 final int id = this.id, start = this.start, end = this.end;
                 int[] locs = locses[id];
-                final int[] arr = CountingSortTask.arr;
+                final int[] arr = CountingSortTask1.arr;
                 final IntIntMap counts = countses[id];
                 counts.clear();
-                int unique = 0;
+                int unique = 0; // The count of unique values
                 for(int i = start; i < end; i++){
-                    int loc = counts.getOrPut(arr[i * 3], unique);
-                    arr[i * 3] = loc;
+                    int loc = counts.getOrPut(arr[i * 3], unique); // Tries to insert the z value into the map
+                    // If the z value is already in the map, the number the first time it was inserted is returned.
+                    arr[i * 3] = loc; // We can discard the actual bitwise z value and assign the insertion number to it
                     if(loc == unique){
                         if(unique >= locs.length){
                             locs = Arrays.copyOf(locs, unique * 3 / 2);
@@ -350,6 +383,10 @@ public class SortedSpriteBatch extends SpriteBatch{
                 locses[id] = locs;
             }
         }
+
+        /**
+         * Task 2: Iterate through all chunks and copy them into destination array, in sorted order.
+         */
         static class CountingSortTask2 implements Runnable{
             static int[] src, dest;
             int start, end, id;
@@ -363,8 +400,9 @@ public class SortedSpriteBatch extends SpriteBatch{
                 final int start = this.start, end = this.end;
                 final int[] locs = locses[id];
                 final int[] src = CountingSortTask2.src, dest = CountingSortTask2.dest;
+                // This iterates through the range of chunks in reverse order, because the cumulative sum (destination index) gives the final index and is decremented.
                 for(int i = end - 1, i3 = i * 3; i >= start; i--, i3 -= 3){
-                    final int destPos = --locs[src[i3]] * 3;
+                    final int destPos = --locs[src[i3]] * 3; // locs[insertion order] is decremented. It should never go below 0.
                     dest[destPos    ] = src[i3    ];
                     dest[destPos + 1] = src[i3 + 1];
                     dest[destPos + 2] = src[i3 + 2];
@@ -372,26 +410,28 @@ public class SortedSpriteBatch extends SpriteBatch{
             }
         }
 
-        private static final CountingSortTask[] tasks = new CountingSortTask[processors];
+        private static final CountingSortTask1[] task1s = new CountingSortTask1[processors];
         private static final CountingSortTask2[] task2s = new CountingSortTask2[processors];
         private static final Future<?>[] futures = new Future<?>[processors];
-        static { for(int i = 0; i < processors; i++){ tasks[i] = new CountingSortTask(); task2s[i] = new CountingSortTask2(); }}
+        static { for(int i = 0; i < processors; i++){ task1s[i] = new CountingSortTask1(); task2s[i] = new CountingSortTask2(); }}
         public static int[] countingSortMapMT(final int[] arr, final int[] swap, final int end){
             final IntIntMap[] countses = CountingSort.countses;
             final int[][] locs = CountingSort.locses;
             final int threads = Math.min(processors, (end + 4095) / 4096); // 4096 Point3s to process per thread
             final int thread_size = end / threads + 1;
-            final CountingSortTask[] tasks = CountingSort.tasks;
+            final CountingSortTask1[] tasks = CountingSort.task1s;
             final CountingSortTask2[] task2s = CountingSort.task2s;
             final Future<?>[] futures = CountingSort.futures;
-            CountingSortTask.arr = CountingSortTask2.src = arr;
+            CountingSortTask1.arr = CountingSortTask2.src = arr;
             CountingSortTask2.dest = swap;
+
+            // Assign various sections of the "Point3" array to each thread.
             for(int s = 0, thread = 0; thread < threads; thread++, s += thread_size){
-                CountingSortTask task = tasks[thread];
+                CountingSortTask1 task = tasks[thread];
                 final int stop = Math.min(s + thread_size, end);
                 task.set(s, stop, thread);
                 task2s[thread].set(s, stop, thread);
-                futures[thread] = commonPool.submit(task);
+                futures[thread] = commonPool.submit(task); // Run task 1
             }
 
             int unique = 0;
@@ -408,14 +448,15 @@ public class SortedSpriteBatch extends SpriteBatch{
             }
             final int[] entries = CountingSort.entries3, entries3a = CountingSort.entries3a;
             final Integer[] entriesBacking = CountingSort.entriesBacking;
+            // Combine the unique z values for reference later
             int j = 0;
             for(int i = 0; i < threads; i++){
                 if(countses[i].size == 0) continue;
                 final IntIntMap.Entries countEntries = countses[i].entries();
                 final IntIntMap.Entry entry = countEntries.next();
-                entries[j    ] = entry.key;
-                entries[j + 1] = entry.value;
-                entries[j + 2] = i;
+                entries[j    ] = entry.key; // z value
+                entries[j + 1] = entry.value; // Insertion order in its respective thread
+                entries[j + 2] = i; // Thread id
                 j += 3;
                 while(countEntries.hasNext){
                     countEntries.next();
@@ -426,6 +467,7 @@ public class SortedSpriteBatch extends SpriteBatch{
                 }
             }
 
+            // Hack to sort the "Point3"s at once. This sorts by z value (as expected)
             for(int i = 0; i < L; i++){
                 entriesBacking[i] = i;
             }
@@ -437,10 +479,13 @@ public class SortedSpriteBatch extends SpriteBatch{
                 entries3a[to + 2] = entries[from + 2];
             }
 
+            // Cumulative sum of locations but this time across threads
             for(int i = 0, pos = 0; i < L * 3; i += 3){
+                // locs[thread][insertion order] is set to its proper sorted position in output array. Note that this is actually the end index.
                 pos = (locs[entries3a[i + 2]][entries3a[i + 1]] += pos);
             }
 
+            // Run task 2
             for(int thread = 0; thread < threads; thread++){
                 futures[thread] = commonPool.submit(task2s[thread]);
             }
@@ -450,15 +495,17 @@ public class SortedSpriteBatch extends SpriteBatch{
             return swap;
         }
         public static int[] countingSortMap(final int[] arr, final int[] swap, final int end){
-            int[] locs = CountingSort.locs;
+            int[] locs = CountingSort.locses[0];
             final IntIntMap counts = CountingSort.countses[0];
             counts.clear();
 
-            int unique = 0;
+            // Iterates through all chunks and gets unique z-values, in insertion order.
+            int unique = 0; // The count of unique values
             final int end3 = end * 3;
             for(int i = 0; i < end3; i += 3){
-                int loc = counts.getOrPut(arr[i], unique);
-                arr[i] = loc;
+                int loc = counts.getOrPut(arr[i], unique); // Tries to insert the z value into the map
+                // If the z value is already in the map, the number the first time it was inserted is returned.
+                arr[i] = loc; // We can discard the actual bitwise z value and assign the insertion number to it
                 if(loc == unique){
                     if(unique >= locs.length){
                         locs = Arrays.copyOf(locs, unique * 3 / 2);
@@ -468,8 +515,9 @@ public class SortedSpriteBatch extends SpriteBatch{
                     locs[loc]++;
                 }
             }
-            CountingSort.locs = locs;
+            CountingSort.locses[0] = locs; // Reassign back to original array, to accommodate for extensions of the array.
 
+            // Iterate through the entries to get the z-insertion data in a form we can process (aka sort).
             if(entries.length < unique){
                 final int prevLength = entries.length;
                 entries = Arrays.copyOf(entries, unique * 3 / 2);
@@ -486,13 +534,14 @@ public class SortedSpriteBatch extends SpriteBatch{
                 countEntries.next(); // it returns the same entry over and over again.
                 entries[j++].set(entry.key, entry.value);
             }
-            Arrays.sort(entries, 0, unique, Structs.comparingInt(p -> p.x));
+            Arrays.sort(entries, 0, unique, Structs.comparingInt(p -> p.x)); // Sort by z value
 
             int prev = entries[0].y, next;
             for(int i = 1; i < unique; i++){
-                locs[next = entries[i].y] += locs[prev];
+                locs[next = entries[i].y] += locs[prev]; // locs[insertion order] is given the cumulative sum for locations
                 prev = next;
             }
+            // Iterate backwards since the cumulative sum is actually the end index, and then decrement the cumulative sum as we progress.
             for(int i = end - 1, i3 = i * 3; i >= 0; i--, i3 -= 3){
                 final int destPos = --locs[arr[i3]] * 3;
                 swap[destPos    ] = arr[i3    ];
@@ -502,6 +551,10 @@ public class SortedSpriteBatch extends SpriteBatch{
             return swap;
         }
     }
+
+    /**
+     * Based on the information given in the chunks, look up the position in source array, and then copy over the next [length] DrawRequests to dest.
+     */
     static class PopulateTask extends RecursiveAction{
         int from, to;
         static int[] tasks;
@@ -533,6 +586,7 @@ public class SortedSpriteBatch extends SpriteBatch{
         protected void compute(){
             final int[] locs = PopulateTask.locs;
             if(to - from > 1 && locs[to] - locs[from] > 2048){
+                // Divide the task into half
                 final int half = (locs[to] + locs[from]) >> 1;
                 int mid = Arrays.binarySearch(locs, from, to, half);
                 if(mid < 0) mid = -mid - 1;
@@ -545,7 +599,7 @@ public class SortedSpriteBatch extends SpriteBatch{
             final int[] tasks = PopulateTask.tasks;
             for(int i = from; i < to; i++){
                 final int point = i * 3, pos = tasks[point + 1], length = tasks[point + 2];
-                if(length < 10){
+                if(length < 10){ // System.arraycopy has overhead if length is small
                     final int end = pos + length;
                     for(int sj = pos, dj = locs[i]; sj < end ; sj++, dj++){
                         dest[dj] = src[sj];
