@@ -24,6 +24,7 @@ package arc.graphics.g2d;
 
 import arc.Core;
 import arc.graphics.*;
+import arc.struct.IntSeq;
 import arc.struct.Seq;
 import arc.struct.FloatSeq;
 import arc.files.Fi;
@@ -853,10 +854,12 @@ public class Font implements Disposable{
             Glyph missingGlyph = this.missingGlyph;
             Seq<Glyph> glyphs = run.glyphs;
             FloatSeq xAdvances = run.xAdvances;
+            IntSeq textPositions = run.textPositions;
 
             // Guess at number of glyphs needed.
             glyphs.ensureCapacity(end - start);
             xAdvances.ensureCapacity(end - start + 1);
+            textPositions.ensureCapacity(end - start);
 
             while(start < end){
                 char ch = str.charAt(start++);
@@ -867,6 +870,7 @@ public class Font implements Disposable{
                 }
 
                 glyphs.add(glyph);
+                textPositions.add(start - 1);
 
                 if(lastGlyph == null) // First glyph on line, adjust the position so it isn't drawn left of 0.
                     xAdvances.add(glyph.fixedWidth ? 0 : -glyph.xoffset * scaleX - padLeft);
