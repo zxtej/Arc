@@ -28,7 +28,7 @@ import static arc.audio.Soloud.*;
  * </p>
  * @author mzechner
  */
-public class Music extends AudioSource{
+public class Music extends AudioSource implements DownloadableAudio{
     @Nullable Fi file;
     int voice = -1;
     boolean looping;
@@ -44,10 +44,9 @@ public class Music extends AudioSource{
 
     }
 
-    public void load(Fi file) throws Exception{
+    @Override
+    public void load(Fi file){
         this.file = file;
-
-        Exception last = null;
 
         for(Fi result : caches(file.nameWithoutExtension() + "__" + file.length() + "." + file.extension())){
             //check if file already exists (use length as "hash")
@@ -55,21 +54,21 @@ public class Music extends AudioSource{
                 //save to the cached file
                 file.copyTo(result);
             }
+            loadDirectly(result);
+        }
+    }
 
+    @Override
+    public void loadDirectly(Fi dest){
+        try{
+            handle = streamLoad(dest.file().getCanonicalPath());
+        }catch(Exception e){
             try{
-                handle = streamLoad(result.file().getCanonicalPath());
-                return;
-            }catch(Exception e){
-                try{
-                    handle = streamLoad(result.file().getAbsolutePath());
-                    return;
-                }catch(Exception ignored){
-                }
-                last = new ArcRuntimeException("Error loading music: " + result.file().getCanonicalPath(), e);
+                handle = streamLoad(dest.file().getAbsolutePath());
+            }catch(Exception ex){
+                throw new ArcRuntimeException("Error loading music: " + dest.absolutePath(), ex);
             }
         }
-
-        if(last != null) throw last;
     }
 
     public void play(){
@@ -152,20 +151,24 @@ public class Music extends AudioSource{
         return "SoloudMusic: " + file;
     }
 
-    protected static Fi[] caches(String name) throws IOException{
+    protected static Fi[] caches(String name){
         String dir = System.getProperty("java.io.tmpdir");
 
         //prefer cache dir on android
-        if(Core.app.isAndroid()){
-            return new Fi[]{
-            Core.files.cache(name), Core.settings.getDataDirectory().child("cache").child(name),
-            dir == null ? Core.files.absolute(File.createTempFile(name, "mind").getAbsolutePath()) : Core.files.absolute(dir).child(name)
-            };
-        }else{
-            return new Fi[]{
-            Core.settings.getDataDirectory().child("cache").child(name), Core.files.cache(name),
-            dir == null ? Core.files.absolute(File.createTempFile(name, "mind").getAbsolutePath()) : Core.files.absolute(dir).child(name)
-            };
+        try{
+            if(Core.app.isAndroid()){
+                return new Fi[]{
+                Core.files.cache(name), Core.settings.getDataDirectory().child("cache").child(name),
+                dir == null ? Core.files.absolute(File.createTempFile(name, "mind").getAbsolutePath()) : Core.files.absolute(dir).child(name)
+                };
+            }else{
+                return new Fi[]{
+                Core.settings.getDataDirectory().child("cache").child(name), Core.files.cache(name),
+                dir == null ? Core.files.absolute(File.createTempFile(name, "mind").getAbsolutePath()) : Core.files.absolute(dir).child(name)
+                };
+            }
+        }catch(IOException e){
+            throw new ArcRuntimeException(e);
         }
     }
 }
