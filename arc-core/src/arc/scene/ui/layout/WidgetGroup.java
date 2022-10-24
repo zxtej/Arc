@@ -81,6 +81,12 @@ public class WidgetGroup extends Group{
         if(!needsLayout) return;
         needsLayout = false;
         layout();
+
+        if(!needsLayout || parent instanceof WidgetGroup) return; //parent will already layout
+        for(int i = 0; i < 5 && needsLayout; i++){ //layout multiple times if needed
+            needsLayout = false;
+            layout();
+        }
     }
 
     /** Returns true if the widget's layout has been {@link #invalidate() invalidated}. */

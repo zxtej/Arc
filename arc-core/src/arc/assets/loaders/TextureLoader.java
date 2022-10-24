@@ -5,6 +5,7 @@ import arc.files.*;
 import arc.graphics.*;
 import arc.graphics.Texture.*;
 import arc.struct.*;
+import arc.util.*;
 
 /**
  * {@link AssetLoader} for {@link Texture} instances. The pixel data is loaded asynchronously. The texture is then created on the
@@ -23,6 +24,7 @@ public class TextureLoader extends AsynchronousAssetLoader<Texture, TextureLoade
     @Override
     public void loadAsync(AssetManager manager, String fileName, Fi file, TextureParameter parameter){
         info.filename = fileName;
+        long start = Time.nanos();
         if(parameter == null || parameter.textureData == null){
             boolean genMipMaps = false;
             info.texture = null;
@@ -38,6 +40,7 @@ public class TextureLoader extends AsynchronousAssetLoader<Texture, TextureLoade
             info.texture = parameter.texture;
         }
         if(!info.data.isPrepared()) info.data.prepare();
+        Log.infoTag("Textures", "Async: " + fileName + " in " + Time.timeSinceNanos(start)/(float)Time.nanosPerMilli + "ms");
     }
 
     @Override

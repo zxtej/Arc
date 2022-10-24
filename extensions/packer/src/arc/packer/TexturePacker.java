@@ -304,7 +304,7 @@ public class TexturePacker{
         if(offsets){
             //offset xy
             write.s(rect.offsetX);
-            write.s((rect.originalHeight - rect.regionHeight - rect.offsetY));
+            write.s(rect.originalHeight - rect.regionHeight - rect.offsetY);
             //original size
             write.s(rect.originalWidth);
             write.s(rect.originalHeight);

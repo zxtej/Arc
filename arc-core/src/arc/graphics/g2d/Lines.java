@@ -266,7 +266,7 @@ public class Lines{
     public static void circle(float x, float y, float rad){
         poly(x, y, circleVertices(rad), rad);
     }
-    
+
     public static void ellipse(float x, float y, float rad, float width, float height, float rot){
         float sides = circleVertices(rad);
         float space = 360 / sides;
@@ -287,7 +287,7 @@ public class Lines{
     public static void dashCircle(float x, float y, float radius){
         float scaleFactor = 0.6f;
         int sides = 10 + (int)(radius * scaleFactor);
-        if(sides % 2 == 1) sides++;
+        sides += sides & 1; // Increment sides if odd
 
         vector.set(0, 0);
 

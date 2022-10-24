@@ -26,7 +26,7 @@ import static arc.audio.Soloud.*;
  * <b>Note</b>: any values provided will not be clamped, it is the developer's responsibility to do so
  * </p>
  */
-public class Sound extends AudioSource{
+public class Sound extends AudioSource implements DownloadableAudio{
     public AudioBus bus = Core.audio == null ? null : Core.audio.soundBus;
 
     long framePlayed;

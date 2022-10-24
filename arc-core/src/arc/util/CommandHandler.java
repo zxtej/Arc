@@ -37,7 +37,7 @@ public class CommandHandler{
 
         message = message.substring(prefix.length());
 
-        String commandstr = message.contains(" ") ? message.substring(0, message.indexOf(" ")) : message;
+        String commandstr = (message.contains(" ") ? message.substring(0, message.indexOf(" ")) : message).toLowerCase();
         String argstr = message.contains(" ") ? message.substring(commandstr.length() + 1) : "";
 
         Seq<String> result = new Seq<>();

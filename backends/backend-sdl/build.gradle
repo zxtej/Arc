@@ -36,25 +36,18 @@ task preJni{
 }
 
 /*
-
 PACKAGES: Linux (Ubuntu)
-
 - libdrm-dev
 - libsdl2-dev
 - libgbm-dev
 - ant
-
 PACKAGES: Linux -> Windows Cross-Compilation
-
 - mingw32
 - ant
-
 PACKAGES: Mac
-
 - sdl2
 - glew
 - ant
-
  */
 
 jnigen{

@@ -18,11 +18,11 @@ public class SpriteBatch extends Batch{
     int maxSpritesInBatch = 0;
 
     /**
-     * Constructs a new SpriteBatch with a size of 4096, one buffer, and the default shader.
+     * Constructs a new SpriteBatch with a size of 8191, one buffer, and the default shader.
      * @see #SpriteBatch(int, Shader)
      */
     public SpriteBatch(){
-        this(4096, null);
+        this(8191, null);
     }
 
     /**

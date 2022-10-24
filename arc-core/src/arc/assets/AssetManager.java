@@ -19,6 +19,7 @@ import java.util.concurrent.*;
 @SuppressWarnings("unchecked")
 public class AssetManager implements Disposable{
     final ObjectMap<Class, ObjectMap<String, RefCountedContainer>> assets = new ObjectMap<>();
+    public final ObjectMap<String, Float> done = new ObjectMap<>();
     final ObjectMap<String, Class> assetTypes = new ObjectMap<>();
     final ObjectMap<String, Seq<String>> assetDependencies = new ObjectMap<>();
     final ObjectSet<String> injected = new ObjectSet<>();
@@ -595,6 +596,8 @@ public class AssetManager implements Disposable{
 
         // if the task has been cancelled or has finished loading
         if(complete){
+            done.put(task.assetDesc.file.name(), Time.timeSinceNanos(task.startTime) / (float)Time.nanosPerMilli);
+            Log.info("@ in @ms", task.assetDesc.file.name(), Time.timeSinceNanos(task.startTime) / (float)Time.nanosPerMilli);
             // increase the number of loaded assets and pop the task from the stack
             if(tasks.size == 1){
                 loaded++;
