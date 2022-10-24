@@ -12,19 +12,13 @@ import android.view.View.*;
 import android.view.inputmethod.*;
 import android.widget.*;
 import arc.*;
-import arc.Graphics;
-import arc.Graphics.*;
-import arc.struct.*;
 import arc.input.InputDevice;
 import arc.input.*;
 import arc.math.geom.*;
-import arc.util.*;
 import arc.util.Log;
 import arc.util.pooling.*;
 
-import java.awt.*;
 import java.util.*;
-import java.util.List;
 
 /**
  * An implementation of the {@link Input} interface for Android.
@@ -74,8 +68,6 @@ public class AndroidInput extends Input implements OnKeyListener, OnTouchListene
         }
     };
     boolean requestFocus = true;
-    private Bits keys = new Bits(KeyCode.all.length);
-    private Bits justPressedKeys = new Bits(KeyCode.all.length);
     private SensorManager manager;
     private Handler handle;
     private boolean compassAvailable = false;
@@ -101,7 +93,6 @@ public class AndroidInput extends Input implements OnKeyListener, OnTouchListene
         view.setOnGenericMotionListener(this);
         view.requestFocus();
         this.config = config;
-
         Arrays.fill(realId, -1);
         handle = new Handler();
         this.app = activity;
@@ -527,12 +518,6 @@ public class AndroidInput extends Input implements OnKeyListener, OnTouchListene
                     }
 
                     keyEvents.add(event);
-                    if(!keys.get(e.getKeyCode())){
-                        keys.set(e.getKeyCode());
-                        justPressedKeys.set(e.getKeyCode());
-                    }else{
-                        justPressedKeys.clear(e.getKeyCode());
-                    }
                     break;
                 case android.view.KeyEvent.ACTION_UP:
                     long timeStamp = System.nanoTime();
@@ -554,15 +539,6 @@ public class AndroidInput extends Input implements OnKeyListener, OnTouchListene
                     event.keyCode = KeyCode.unknown;
                     event.type = KeyEvent.KEY_TYPED;
                     keyEvents.add(event);
-
-                    if(keyCode == 255){
-                        keys.clear(255);
-                    }else{
-                        if(keys.get(e.getKeyCode())){
-                            keys.clear(e.getKeyCode());
-                            justPressedKeys.clear(e.getKeyCode());
-                        }
-                    }
             }
             Core.graphics.requestRendering();
         }
