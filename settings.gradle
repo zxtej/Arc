@@ -34,6 +34,6 @@ include ":natives:natives-freetype-ios"
 
 sourceControl {
     gitRepository("https://github.com/libgdx/gdx-jnigen.git") {
-        producesModule("com.github.libgdx.gdx-jnigen:gdx-jnigen-gradle")
+        producesModule("com.github.libgdx.gdx-jnigen")
     }
 }
