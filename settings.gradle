@@ -31,3 +31,9 @@ include ":natives:natives-box2d-desktop"
 include ":natives:natives-box2d-android"
 include ":natives:natives-box2d-ios"
 include ":natives:natives-freetype-ios"
+
+sourceControl {
+    gitRepository("https://github.com/gradle/native-samples-cpp-library.git") {
+        producesModule("org.gradle.cpp-samples:utilities")
+    }
+}
