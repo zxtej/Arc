@@ -34,7 +34,7 @@ allprojects{
         }
 
         dependencies{
-            classpath "com.github.libgdx.gdx-jnigen:gdx-jnigen-gradle:dffc32eecbf77aad264991ea44f1767a58cbee9d"
+            implementation group: 'com.badlogicgames.gdx', name: 'gdx-jnigen-gradle', version: '2.3.1'
         }
     }
 
