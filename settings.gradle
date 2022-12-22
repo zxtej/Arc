@@ -33,7 +33,7 @@ include ":natives:natives-box2d-ios"
 include ":natives:natives-freetype-ios"
 
 sourceControl {
-    gitRepository("https://github.com/gradle/native-samples-cpp-library.git") {
-        producesModule("org.gradle.cpp-samples:utilities")
+    gitRepository("https://github.com/libgdx/gdx-jnigen.git") {
+        producesModule("com.github.libgdx.gdx-jnigen:gdx-jnigen-gradle")
     }
 }
