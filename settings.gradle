@@ -31,9 +31,3 @@ include ":natives:natives-box2d-desktop"
 include ":natives:natives-box2d-android"
 include ":natives:natives-box2d-ios"
 include ":natives:natives-freetype-ios"
-
-sourceControl {
-    gitRepository("https://github.com/libgdx/gdx-jnigen.git") {
-        producesModule("com.github.libgdx.gdx-jnigen")
-    }
-}
