@@ -5,7 +5,7 @@ ext{
 
 versions.robovm = "2.3.18"
 versions.junit = "4.11"
-versions.jnigen = "28dd11fa4c33a7ae9e58897912b52ba7d53d54fe"
+versions.jnigen = "2.3.1"
 
 libraries.robovm = [
     "com.mobidevelop.robovm:robovm-rt:${versions.robovm}",
@@ -18,7 +18,7 @@ libraries.junit = [
 ]
 
 libraries.jnigen = [
-    "com.github.libgdx.gdx-jnigen:gdx-jnigen:$versions.jnigen"
+    "com.badlogicgames.gdx:gdx-jnigen:$versions.jnigen"
 ]
 
 allprojects{
@@ -34,7 +34,7 @@ allprojects{
         }
 
         dependencies{
-            classpath 'com.badlogicgames.gdx:gdx-jnigen-gradle:2.3.1'
+            classpath 'com.badlogicgames.gdx:gdx-jnigen-gradle:$versions.jnigen'
         }
     }
 
