@@ -33,14 +33,9 @@ allprojects{
             //maven{ url 'https://jitpack.io' }
         }
 
-        gitRepository("https://github.com/libgdx/gdx-jnigen.git") {
-            producesModule("com.github.libgdx.gdx-jnigen:gdx-jnigen-gradle")
-        }
-        /*
         dependencies{
-            classpath "com.github.libgdx.gdx-jnigen:gdx-jnigen-gradle:dffc32eecbf77aad264991ea44f1767a58cbee9d"
+            implementation('com.github.libgdx.gdx-jnigen:gdx-jnigen-gradle')
         }
-        */
     }
 
     repositories{
