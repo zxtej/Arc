@@ -20,9 +20,10 @@ public class SortedSpriteBatch extends SpriteBatch{
     int[] locs = new int[contiguous.length];
 
     protected DrawRequest[] requests = new DrawRequest[10000];
+    protected DrawRequest[] requestCopy = new DrawRequest[10000];
     protected boolean sort;
     protected boolean flushing;
-    protected float[] requestZ = new float[10000];
+    protected float[] requestUnsortedZ = new float[10000]; // Do not use this after the DrawRequests have been sorted.
     protected int numRequests = 0;
 
     {
@@ -64,7 +65,7 @@ public class SortedSpriteBatch extends SpriteBatch{
     protected void draw(Texture texture, float[] spriteVertices, int offset, int count){
         if(sort && !flushing){
             if(numRequests + count - offset >= this.requests.length) expandRequests();
-            float[] requestZ = this.requestZ;
+            float[] requestZ = this.requestUnsortedZ;
             DrawRequest[] requests = this.requests;
 
             for(int i = offset; i < count; i += SPRITE_SIZE){
@@ -88,7 +89,7 @@ public class SortedSpriteBatch extends SpriteBatch{
             final DrawRequest req = requests[numRequests];
             req.x = x;
             req.y = y;
-            requestZ[numRequests] = req.z = z;
+            requestUnsortedZ[numRequests] = req.z = z;
             req.originX = originX;
             req.originY = originY;
             req.width = width;
@@ -115,7 +116,7 @@ public class SortedSpriteBatch extends SpriteBatch{
             req.blending = blending;
             req.mixColor = mixColorPacked;
             req.color = colorPacked;
-            requestZ[numRequests] = req.z = z;
+            requestUnsortedZ[numRequests] = req.z = z;
             req.texture = null;
             numRequests ++;
         }else{
@@ -130,7 +131,7 @@ public class SortedSpriteBatch extends SpriteBatch{
             newRequests[i] = new DrawRequest();
         }
         this.requests = newRequests;
-        this.requestZ = Arrays.copyOf(requestZ, newRequests.length);
+        this.requestUnsortedZ = Arrays.copyOf(requestUnsortedZ, newRequests.length);
     }
 
     @Override
@@ -175,19 +176,104 @@ public class SortedSpriteBatch extends SpriteBatch{
         }
     }
 
+    public static boolean debug = true;
+    public static boolean cppTest = true;
     protected void sortRequests(){
-        if(multithreaded){
-            sortRequestsThreaded();
-        }else{
-            sortRequestsStandard();
+        String mode;
+        long start = Time.nanos();
+        if (cppTest) {
+            float[] debug = new float[3];
+            sortRequestsCpp(requests, requestUnsortedZ, numRequests, debug);
+            mode = "cpp";
+        } else {
+            if (multithreaded) {
+                sortRequestsThreaded();
+                mode = "classic_mt";
+            } else {
+                sortRequestsStandard();
+                mode = "classic_st";
+            }
         }
+        if (debug) Log.debug("Frame @ (Using @): @ms", Core.graphics.getFrameId(), mode, Time.millisSinceNanos(start));
     }
+
+    /*JNI
+       #include <unordered_map> // unsorted_map and map are similar for small values?
+       #include <algorithm>
+       #include <utility>
+       #include <vector>
+       #include <cstring>
+       std::unordered_map<int, int> zMap;
+       std::vector<std::pair<int,int>> runs;  // pair<z index, number of requests>
+       std::vector<std::pair<int,int>> runZs; // pair<z index, insertion idx>
+       std::vector<int> runCounts; // for each insertion idx, number of runs with this z layer
+       jobject *requestsCopy = new jobject[10000];
+       int requestsCopyLength = 10000;
+     */
+    static native void sortRequestsCpp(DrawRequest[] requests, float[] requestZf, int count, float[] debug); /*
+        if(requestsCopyLength < count){
+            delete[] requestsCopy;
+            requestsCopy = new jobject[requestsCopyLength = (count + (count >> 3))];
+        }
+        memcpy(requestsCopy, requests, sizeof(jobject) * count);
+
+        int *requestZ = reinterpret_cast<int*>(requestZf);
+
+        int numUniqueRuns = 0;
+        int z = requestZ[0];
+        int runStart = 0;
+        for (int i = 1; i < count; ++i){
+            if(requestZ[i] == z) continue;
+            int idx = (*(zMap.insert(std::pair<int, int>(z, numUniqueRuns)).first)).first;
+            if(idx == numUniqueRuns){
+                runZs.emplace_back(z, numUniqueRuns);
+                runCounts.push_back(0);
+                ++numUniqueRuns;
+            }
+            runs.emplace_back(idx, i - runStart);
+            runCounts[idx] += i - runStart;
+
+            z = requestZ[i];
+            runStart = i;
+        }
+        {
+            int idx = (*(zMap.insert(std::pair<int, int>(z, numUniqueRuns)).first)).first;
+            if(idx == numUniqueRuns){
+                runZs.emplace_back(z, numUniqueRuns);
+                runCounts.push_back(0);
+                ++numUniqueRuns;
+            }
+            runs.emplace_back(idx, count - runStart);
+            runCounts[idx] += count - runStart;
+        }
+
+        std::sort(runZs.begin(), runZs.end());
+
+        for(int i = 0, pos = 0; i < numUniqueRuns; ++i){
+            int idx = runZs[i].second;
+            int c = runCounts[idx];
+            runCounts[idx] = pos;
+            pos += c;
+        }
+
+        for(int srcPos = 0, i = 0, stop = runs.size(); i < stop; ++i){
+            int idx = runs[i].first;
+            int numItems = runs[i].second;
+            int destPos = runCounts[idx];
+            runCounts[idx] += numItems;
+            memcpy(requests + destPos, requestsCopy + srcPos, sizeof(jobject) * numItems);
+            srcPos += numItems;
+        }
+
+        zMap.clear();
+        memset(&runCounts[0], 0, sizeof(int) * numUniqueRuns);
+    */
 
     protected void sortRequestsThreaded(){
         final int numRequests = this.numRequests;
         if(copy.length < numRequests) copy = new DrawRequest[numRequests + (numRequests >> 3)];
         final DrawRequest[] items = requests, itemCopy = copy;
-        final float[] itemZ = requestZ;
+        final float[] itemZ = requestUnsortedZ;
         final Future<?> initTask = commonPool.pool.submit(() -> System.arraycopy(items, 0, itemCopy, 0, numRequests));
 
         int[] contiguous = this.contiguous;
@@ -239,7 +325,7 @@ public class SortedSpriteBatch extends SpriteBatch{
         final int numRequests = this.numRequests;
         if(copy.length < numRequests) copy = new DrawRequest[numRequests + (numRequests >> 3)];
         final DrawRequest[] items = copy;
-        final float[] itemZ = requestZ;
+        final float[] itemZ = requestUnsortedZ;
         System.arraycopy(requests, 0, items, 0, numRequests);
         int[] contiguous = this.contiguous;
         int ci = 0, cl = contiguous.length;
