@@ -34,7 +34,7 @@ allprojects{
         }
 
         dependencies{
-            classpath 'com.badlogicgames.gdx:gdx-jnigen-gradle:$versions.jnigen'
+            classpath "com.badlogicgames.gdx:gdx-jnigen-gradle:$versions.jnigen"
         }
     }
 
